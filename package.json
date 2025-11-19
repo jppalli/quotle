@@ -1,0 +1,32 @@
+{
+  "name": "quotle",
+  "version": "1.0.0",
+  "description": "Daily Quote Puzzle Game - Unscramble quotes from famous authors",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx http-server . -p 8080",
+    "dev": "npx http-server . -p 8080 -o",
+    "deploy": "vercel --prod"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jppalli/quotle.git"
+  },
+  "dependencies": {
+    "@arkadiuminc/sdk": "^2"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "keywords": [
+    "game",
+    "puzzle",
+    "quotes",
+    "word-game",
+    "daily-puzzle",
+    "arkadium"
+  ],
+  "author": "jppalli",
+  "license": "MIT",
+  "homepage": "https://github.com/jppalli/quotle#readme"
+}

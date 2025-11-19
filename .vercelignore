@@ -1,0 +1,17 @@
+# Development files
+node_modules/
+*.log
+
+# Test files
+*-tests.js
+game-tests.js
+
+# Development scripts
+server.js
+
+# Archives
+*.zip
+
+# Verification scripts
+verify-four-indices.js
+restore-duplicates.js
