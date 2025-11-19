@@ -181,16 +181,24 @@ class DailyQuotePuzzle {
 
     async init() {
         try {
+            console.log('🎮 Starting game initialization...');
             this.startTime = new Date();
+            
+            console.log('🎨 Initializing PixiJS...');
             await this.initializePixiJS();
+            
+            console.log('🔊 Initializing sounds...');
             await this.initializeSounds();
 
             // Initialize Arkadium stub (lightweight version for standalone)
+            console.log('🔌 Initializing Arkadium stub...');
             this.arkadium = new ArkadiumIntegration(this);
-            console.log('🎮 Running in standalone mode with Arkadium stub');
+            console.log('✅ Running in standalone mode with Arkadium stub');
 
+            console.log('⚙️ Loading settings...');
             this.loadSettings();
-            // this.loadMusicTracks(); // Music selection disabled
+            
+            console.log('💾 Loading user data...');
             await this.loadUserData();
 
             // Check for shared challenge in URL
@@ -222,9 +230,16 @@ class DailyQuotePuzzle {
                 }
             }
 
+            console.log('🎨 Rendering quote...');
             this.renderQuote();
+            
+            console.log('📅 Updating date display...');
             this.updateDateDisplay();
+            
+            console.log('⌨️ Rendering input area...');
             this.renderInputArea();
+            
+            console.log('🎯 Setting up event listeners...');
             this.setupEventListeners();
 
             // Ensure all modals are hidden (using new animation system)

@@ -4311,6 +4311,27 @@
     <script src="arkadium-integration-stub.js"></script>
     <script src="achievements-manager.js"></script>
     <script src="game-modern.js"></script>
+    
+    <!-- Safety timeout to hide loading screen if initialization fails -->
+    <script>
+        // Force hide loading screen after 10 seconds if it's still showing
+        setTimeout(() => {
+            const loadingScreen = document.getElementById('loadingScreen');
+            if (loadingScreen && !loadingScreen.classList.contains('fade-out')) {
+                console.warn('⚠️ Loading screen timeout - forcing hide');
+                loadingScreen.classList.add('fade-out');
+                document.body.classList.remove('loading');
+                setTimeout(() => {
+                    if (loadingScreen.parentNode) {
+                        loadingScreen.parentNode.removeChild(loadingScreen);
+                    }
+                }, 500);
+            }
+        }, 10000);
+        
+        // Log when scripts are loaded
+        console.log('📜 All scripts loaded');
+    </script>
 </body>
 
 </html>
