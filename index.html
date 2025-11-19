@@ -4302,26 +4302,13 @@
         </div>
     </div>
 
-    <!-- Arkadium SDK -->
-    <script src="https://developers.arkadium.com/cdn/sdk/v2/sdk.js"></script>
-    <script>
-        // Initialize Arkadium SDK when DOM is ready
-        document.addEventListener('DOMContentLoaded', async () => {
-            try {
-                const sdk = await window.ArkadiumGameSDK.getInstance();
-                console.log('🎮 Arkadium SDK loaded successfully');
-                // sdk.debugMode(true); // Disabled for production
-            } catch (error) {
-                console.warn('⚠️ Arkadium SDK not available in development mode');
-            }
-        });
-    </script>
+    <!-- Arkadium SDK REMOVED for standalone version -->
 
     <!-- Load quotes from external file -->
     <script src="quotes_calendar.js"></script>
     <script src="scramble-utils.js"></script>
     <script src="quote-manager.js"></script>
-    <script src="arkadium-integration.js"></script>
+    <script src="arkadium-integration-stub.js"></script>
     <script src="achievements-manager.js"></script>
     <script src="game-modern.js"></script>
 </body>

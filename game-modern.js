@@ -98,8 +98,8 @@ class DailyQuotePuzzle {
 
         this.currentMusicTrack = 'backgroundMusic';
 
-        // Arkadium SDK Integration
-        this.arkadium = null;
+        // Arkadium SDK Integration - REMOVED for standalone version
+        // this.arkadium = null;
 
         // DOM Elements
         this.elements = this.initializeElements();
@@ -185,31 +185,9 @@ class DailyQuotePuzzle {
             await this.initializePixiJS();
             await this.initializeSounds();
 
-            // Initialize Arkadium SDK
+            // Initialize Arkadium stub (lightweight version for standalone)
             this.arkadium = new ArkadiumIntegration(this);
-
-            // Wait for SDK to be fully initialized before notifying game ready
-            await this.waitForSDKInitialization();
-
-            // Enable debug mode for development/testing (uncomment next line)
-            // this.arkadium.enableDebugMode();
-
-            // Set up pause/resume event listeners
-            this.setupArkadiumEventListeners();
-
-            // Check for authentication and sync data if needed
-            try {
-                await this.handleAuthenticationSync();
-            } catch (error) {
-                console.error('❌ Error in authentication sync:', error);
-                // Continue with initialization
-            }
-
-            // Banner ads removed - keeping only rewarded ads
-
-            // Notify Arena that game is ready to be shown (removes loading overlay)
-            // This is CRITICAL - without this call, the loading overlay won't be removed
-            this.arkadium.notifyGameReady();
+            console.log('🎮 Running in standalone mode with Arkadium stub');
 
             this.loadSettings();
             // this.loadMusicTracks(); // Music selection disabled
@@ -312,29 +290,7 @@ class DailyQuotePuzzle {
             // Always hide loading screen even if there's an error
             this.hideLoadingScreen();
 
-            // Check if this is an Arkadium Sandbox environment
-            const isArkadiumSandbox = window.location.hostname.includes('arkadium') ||
-                window.location.hostname.includes('z19.web.core.windows.net');
-
-            if (isArkadiumSandbox) {
-                console.log('🏗️ Arkadium Sandbox detected - attempting to continue with basic functionality');
-
-                // Try to initialize basic game functionality without full Arkadium integration
-                try {
-                    this.currentQuote = this.findTodayQuote();
-                    this.revealedLetters = new Set(); // Clear revealed letters for new puzzle
-                    this.wordCorrectLetters = {}; // Clear word correct letters for new puzzle
-                    this.wordValidationState = 'pending'; // Reset validation state for new puzzle
-                    this.updateDateDisplay();
-                    this.renderInputArea();
-                    this.setupEventListeners();
-                    await this.loadInkDrops();
-                    console.log('✅ Basic game functionality initialized for Arkadium Sandbox');
-                    return; // Exit successfully
-                } catch (basicError) {
-                    console.error('❌ Failed to initialize basic functionality:', basicError);
-                }
-            }
+            // Standalone mode - no special environment detection needed
 
             // Show error message for other environments or if basic initialization fails
             const errorMessage = document.createElement('div');
@@ -367,14 +323,7 @@ class DailyQuotePuzzle {
             `;
             document.body.appendChild(errorMessage);
 
-            // Still try to notify Arkadium that we're ready (even if there was an error)
-            if (this.arkadium) {
-                try {
-                    this.arkadium.notifyGameReady();
-                } catch (arkadiumError) {
-                    console.error('❌ Error notifying Arkadium of game ready state:', arkadiumError);
-                }
-            }
+            // Standalone mode - no SDK notification needed
         }
     }
 
@@ -697,54 +646,10 @@ class DailyQuotePuzzle {
     }
 
     async loadUserData() {
-        // Use Arkadium specialized persistence method with enhanced error handling
-        if (this.arkadium && this.arkadium.isInitialized) {
-            try {
-                const userData = await this.arkadium.loadUserProgress();
-                console.log('🔍 Raw Arkadium data:', userData, typeof userData);
+        // Use localStorage for data persistence (Arkadium SDK removed)
+        console.log('📂 Loading user data from localStorage...');
 
-                // Enhanced validation for Arkadium data
-                if (userData && typeof userData === 'object' && userData !== null && userData.constructor === Object) {
-                    console.log('📂 User data loaded from Arkadium persistence');
-
-                    // Ensure the data has the expected structure with deep validation
-                    const validatedData = {
-                        puzzles: (userData.puzzles && typeof userData.puzzles === 'object' && userData.puzzles.constructor === Object) ? userData.puzzles : {},
-                        stats: (userData.stats && typeof userData.stats === 'object') ? {
-                            totalSolved: userData.stats.totalSolved || 0,
-                            currentStreak: userData.stats.currentStreak || 0,
-                            maxStreak: userData.stats.maxStreak || 0,
-                            totalTime: userData.stats.totalTime || 0,
-                            lastPlayed: userData.stats.lastPlayed || null
-                        } : {
-                            totalSolved: 0,
-                            currentStreak: 0,
-                            maxStreak: 0,
-                            totalTime: 0,
-                            lastPlayed: null
-                        },
-                        achievements: (userData.achievements && typeof userData.achievements === 'object' && userData.achievements.constructor === Object) ? userData.achievements : {},
-                        inkDrops: (userData.inkDrops && typeof userData.inkDrops === 'object') ? {
-                            count: userData.inkDrops.count || 0,
-                            lastRefresh: userData.inkDrops.lastRefresh || null
-                        } : { count: 0, lastRefresh: null },
-                        playedDates: (userData.playedDates && Array.isArray(userData.playedDates)) ? userData.playedDates : []
-                    };
-
-                    console.log('✅ Validated Arkadium data:', validatedData);
-
-                    // Initialize achievements manager with user data
-                    this.achievementsManager.initializeFromUserData(validatedData);
-                    return validatedData;
-                } else {
-                    console.warn('⚠️ Arkadium returned invalid data, falling back to localStorage');
-                }
-            } catch (error) {
-                console.error('❌ Error loading from Arkadium persistence, falling back to localStorage:', error);
-            }
-        }
-
-        // Fallback to local storage (legacy support)
+        // Load from local storage
         let userData;
         try {
             const legacyData = localStorage.getItem('quotePuzzleUserData');
@@ -776,11 +681,7 @@ class DailyQuotePuzzle {
         userData.achievements = userData.achievements || {};
         userData.inkDrops = userData.inkDrops || defaultUserData.inkDrops;
 
-        // Migrate legacy data to Arkadium persistence if available
-        if (this.arkadium && this.arkadium.isInitialized && localStorage.getItem('quotePuzzleUserData')) {
-            console.log('🔄 Migrating legacy data to Arkadium persistence');
-            await this.arkadium.saveUserProgress(userData);
-        }
+        // No migration needed in standalone mode
 
         // Initialize achievements manager with user data
         this.achievementsManager.initializeFromUserData(userData);
@@ -795,26 +696,9 @@ class DailyQuotePuzzle {
             console.log('🏆 Synced achievements to user data:', Object.keys(userData.achievements).length, 'achievements');
         }
 
-        // Use Arkadium specialized persistence method
-        if (this.arkadium && this.arkadium.isInitialized) {
-            try {
-                await this.arkadium.saveUserProgress(userData);
-                console.log('💾 User data saved via Arkadium persistence');
-
-                // Also save to localStorage as backup
-                localStorage.setItem('quotePuzzleUserData', JSON.stringify(userData));
-                console.log('💾 User data also saved to localStorage as backup');
-            } catch (error) {
-                console.error('❌ Failed to save via Arkadium persistence:', error);
-                // Fallback to local storage
-                localStorage.setItem('quotePuzzleUserData', JSON.stringify(userData));
-                console.log('💾 User data saved to localStorage (fallback)');
-            }
-        } else {
-            // Fallback to local storage when Arkadium is not available
-            localStorage.setItem('quotePuzzleUserData', JSON.stringify(userData));
-            console.log('💾 User data saved to localStorage (Arkadium not available)');
-        }
+        // Save to localStorage (Arkadium SDK removed)
+        localStorage.setItem('quotePuzzleUserData', JSON.stringify(userData));
+        console.log('💾 User data saved to localStorage');
     }
 
     async saveCurrentPuzzleState() {
@@ -834,13 +718,8 @@ class DailyQuotePuzzle {
                 timestamp: Date.now()
             };
 
-            // Save to Arkadium persistence
-            if (this.arkadium && this.arkadium.isInitialized) {
-                await this.arkadium.saveGameState(currentState);
-            } else {
-                // Fallback to localStorage
-                localStorage.setItem('dailyQuotePuzzleCurrentState', JSON.stringify(currentState));
-            }
+            // Save to localStorage (Arkadium SDK removed)
+            localStorage.setItem('dailyQuotePuzzleCurrentState', JSON.stringify(currentState));
             console.log('💾 Saved current puzzle state:', currentState.date);
         } catch (error) {
             console.error('Error saving current puzzle state:', error);
@@ -851,17 +730,10 @@ class DailyQuotePuzzle {
         try {
             let state = null;
 
-            // Try to load from Arkadium persistence first
-            if (this.arkadium && this.arkadium.isInitialized) {
-                state = await this.arkadium.loadGameState();
-            }
-
-            // Fallback to localStorage if Arkadium not available or no data
-            if (!state) {
-                const stateStr = localStorage.getItem('dailyQuotePuzzleCurrentState');
-                if (stateStr) {
-                    state = JSON.parse(stateStr);
-                }
+            // Load from localStorage (Arkadium SDK removed)
+            const stateStr = localStorage.getItem('dailyQuotePuzzleCurrentState');
+            if (stateStr) {
+                state = JSON.parse(stateStr);
             }
 
             if (state) {
@@ -871,11 +743,7 @@ class DailyQuotePuzzle {
                 const todayStr = this.formatDate(today);
                 if (state.date === todayStr) {
                     console.log('🗑️ Saved state is from today, clearing it');
-                    if (this.arkadium && this.arkadium.isInitialized) {
-                        await this.arkadium.clearGameState();
-                    } else {
-                        localStorage.removeItem('dailyQuotePuzzleCurrentState');
-                    }
+                    localStorage.removeItem('dailyQuotePuzzleCurrentState');
                     return null;
                 }
 
@@ -885,11 +753,7 @@ class DailyQuotePuzzle {
                 const savedDate = new Date(state.date);
                 if (savedDate < sevenDaysAgo) {
                     console.log('🗑️ Saved state is too old, clearing it');
-                    if (this.arkadium && this.arkadium.isInitialized) {
-                        await this.arkadium.clearGameState();
-                    } else {
-                        localStorage.removeItem('dailyQuotePuzzleCurrentState');
-                    }
+                    localStorage.removeItem('dailyQuotePuzzleCurrentState');
                     return null;
                 }
 
@@ -948,11 +812,7 @@ class DailyQuotePuzzle {
         await this.saveUserData(userData);
 
         // Clear saved puzzle state when puzzle is completed
-        if (this.arkadium && this.arkadium.isInitialized) {
-            await this.arkadium.clearGameState();
-        } else {
-            localStorage.removeItem('dailyQuotePuzzleCurrentState');
-        }
+        localStorage.removeItem('dailyQuotePuzzleCurrentState');
         console.log('🗑️ Cleared saved puzzle state after completion');
     }
 
