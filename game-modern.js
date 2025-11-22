@@ -4,6 +4,7 @@ class DailyQuotePuzzle {
         // Initialize quote manager for remote updates
         this.quoteManager = new QuoteManager();
         this.quotes = quotesCalendar; // Fallback
+        console.log('📚 Quotes calendar loaded:', typeof quotesCalendar !== 'undefined' ? quotesCalendar.length + ' quotes' : 'NOT LOADED');
         // Game initialization - will be set in init() after checking for saved state
         this.currentQuote = null;
         // Quote selected for today
@@ -218,6 +219,8 @@ class DailyQuotePuzzle {
                 // No saved state, load today's puzzle
                 console.log('📅 No saved state found, loading today\'s puzzle');
                 this.currentQuote = this.findTodayQuote();
+                console.log('📝 Current quote loaded:', this.currentQuote ? this.currentQuote.text : 'NULL');
+                console.log('📝 Scrambled words:', this.currentQuote ? this.currentQuote.scrambledWords.length : 0);
                 this.revealedLetters = new Set(); // Clear revealed letters for new puzzle
                 this.wordCorrectLetters = {}; // Clear word correct letters for new puzzle
                 this.wordValidationState = 'pending'; // Reset validation state for new puzzle
@@ -1485,6 +1488,12 @@ class DailyQuotePuzzle {
     }
 
     renderQuote() {
+        if (!this.currentQuote || !this.currentQuote.text) {
+            console.error('❌ Cannot render quote: currentQuote is null or invalid', this.currentQuote);
+            return;
+        }
+        
+        console.log('🎨 Rendering quote:', this.currentQuote.text.substring(0, 50) + '...');
         const words = this.currentQuote.text.split(' ');
         let html = '';
 
