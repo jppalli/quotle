@@ -1335,13 +1335,21 @@ class DailyQuotePuzzle {
         // Use quote manager to get today's quote (checks remote first, then local)
         const todayQuote = this.quoteManager.getQuoteForDate(todayStr);
 
-        if (todayQuote) {
+        if (todayQuote && todayQuote.date === todayStr) {
             console.log(`✅ Found today's quote for ${todayStr}: "${todayQuote.text}"`);
             return this.processQuoteForGame(todayQuote);
-        } else {
-            console.log(`❌ No quote found for today (${todayStr}), using first quote as fallback`);
-            return this.processQuoteForGame(this.quotes[0]);
         }
+
+        // If no exact match, cycle through quotes based on day of year
+        // This ensures the game always has a quote even beyond the calendar
+        const startOfYear = new Date(today.getFullYear(), 0, 0);
+        const diff = today - startOfYear;
+        const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const quoteIndex = dayOfYear % this.quotes.length;
+        
+        console.log(`📅 No exact quote for ${todayStr}, using cycled quote at index ${quoteIndex}`);
+        const fallbackQuote = { ...this.quotes[quoteIndex], date: todayStr };
+        return this.processQuoteForGame(fallbackQuote);
     }
 
     processQuoteForGame(quote) {
