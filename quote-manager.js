@@ -31,6 +31,21 @@ class QuoteManager {
         const timeSinceLastCheck = now - this.lastUpdateCheck;
         return timeSinceLastCheck > this.updateCheckInterval;
     }
+
+    compareVersions(serverVersion, localVersion) {
+        const serverParts = String(serverVersion ?? '0').split('.').map(part => parseInt(part, 10) || 0);
+        const localParts = String(localVersion ?? '0').split('.').map(part => parseInt(part, 10) || 0);
+        const maxLen = Math.max(serverParts.length, localParts.length);
+
+        for (let i = 0; i < maxLen; i++) {
+            const s = serverParts[i] || 0;
+            const l = localParts[i] || 0;
+            if (s > l) return 1;
+            if (s < l) return -1;
+        }
+
+        return 0;
+    }
     
     async checkForUpdates() {
         try {
@@ -54,7 +69,7 @@ class QuoteManager {
             
             console.log(`📊 Local version: ${localVersion}, Server version: ${serverVersion}`);
             
-            if (serverVersion > localVersion) {
+            if (this.compareVersions(serverVersion, localVersion) > 0) {
                 console.log('📥 New quotes available, downloading...');
                 await this.downloadUpdatedQuotes();
             } else {

@@ -6,6 +6,7 @@ const path = require('path');
 const url = require('url');
 
 const port = process.env.PORT || 8080;
+const baseDir = path.resolve(__dirname);
 
 // MIME types for different file extensions
 const mimeTypes = {
@@ -30,47 +31,50 @@ const mimeTypes = {
 const server = http.createServer((req, res) => {
     console.log(`${req.method} ${req.url}`);
 
-    // Parse URL
+    // Parse URL and constrain file access to project directory
     const parsedUrl = url.parse(req.url);
-    let pathname = `.${parsedUrl.pathname}`;
+    let requestPath = '/';
+    try {
+        requestPath = decodeURIComponent(parsedUrl.pathname || '/');
+    } catch (error) {
+        res.statusCode = 400;
+        res.end('Bad Request');
+        return;
+    }
+    const normalizedPath = path.normalize(requestPath === '/' ? '/index.html' : requestPath);
+    const resolvedPath = path.resolve(baseDir, `.${normalizedPath}`);
 
-    // If pathname is just a directory, serve index.html
-    if (pathname === './') {
-        pathname = './index.html';
+    if (!resolvedPath.startsWith(baseDir + path.sep) && resolvedPath !== baseDir) {
+        res.statusCode = 403;
+        res.end('Forbidden');
+        return;
     }
 
-    // Get file extension
-    const ext = path.parse(pathname).ext;
-
-    fs.exists(pathname, (exist) => {
-        if (!exist) {
-            // File not found
+    fs.stat(resolvedPath, (statErr, stats) => {
+        if (statErr) {
             res.statusCode = 404;
-            res.end(`File ${pathname} not found!`);
+            res.end('File not found!');
             return;
         }
 
-        // If it's a directory, try to serve index.html
-        if (fs.statSync(pathname).isDirectory()) {
-            pathname += '/index.html';
-        }
+        const filePath = stats.isDirectory() ? path.join(resolvedPath, 'index.html') : resolvedPath;
 
-        // Read file from file system
-        fs.readFile(pathname, (err, data) => {
-            if (err) {
+        fs.readFile(filePath, (readErr, data) => {
+            if (readErr) {
                 res.statusCode = 500;
-                res.end(`Error getting the file: ${err}.`);
-            } else {
-                // Set the right header
-                res.setHeader('Content-type', mimeTypes[ext] || 'text/plain');
-                
-                // Add CORS headers for development
-                res.setHeader('Access-Control-Allow-Origin', '*');
-                res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-                res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-                
-                res.end(data);
+                res.end(`Error getting the file: ${readErr}.`);
+                return;
             }
+
+            const ext = path.extname(filePath);
+            res.setHeader('Content-type', mimeTypes[ext] || 'text/plain');
+
+            // Add CORS headers for development
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+            res.end(data);
         });
     });
 });

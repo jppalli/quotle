@@ -34,6 +34,12 @@ class DailyQuotePuzzle {
         this.unscrambleLastUsed = 0;
         this.unscrambleCooldownInterval = null;
 
+        // Wrong-guess UX: short feedback lock + optional auto reset
+        this.incorrectFeedbackLockUntil = 0;
+        this.incorrectAutoResetTimeout = null;
+        this.incorrectFeedbackLockMs = 800;
+        this.incorrectAutoResetDelayMs = 1500;
+
         // Achievements system
         this.achievementsManager = new AchievementsManager();
         this.hintsUsedThisPuzzle = 0;
@@ -44,6 +50,10 @@ class DailyQuotePuzzle {
         this.firstTimeInkDrops = 5; // First time users get 5 drops
         this.dailyInkDrops = 3; // Daily login gives 3 drops
         this.inkDropsLoaded = false; // Flag to prevent duplicate loading
+
+        // Ad-for-drop cooldown (10 minutes)
+        this.adForDropCooldown = 10 * 60 * 1000; // 10 minutes in ms
+        this.adForDropLastUsed = 0;
 
 
 
@@ -115,8 +125,12 @@ class DailyQuotePuzzle {
             quoteAuthor: document.getElementById('quoteAuthor'),
             congrats: document.getElementById('congrats'),
             inputArea: document.getElementById('inputArea'),
+            letterInputRow: document.getElementById('letterInputRow'),
+            letterCellsWrap: document.getElementById('letterCellsWrap'),
             letterCells: document.getElementById('letterCells'),
             availableLetters: document.getElementById('availableLetters'),
+            quickResetRow: document.getElementById('quickResetRow'),
+            quickResetWordBtn: document.getElementById('quickResetWordBtn'),
             resetBtn: document.getElementById('resetBtn'),
             backspaceBtn: document.getElementById('backspaceBtn'),
             unscrambleBtn: document.getElementById('unscrambleBtn'),
@@ -139,6 +153,7 @@ class DailyQuotePuzzle {
             menuChangeSongLink: document.getElementById('menuChangeSongLink'),
             menuSoundEffectsToggle: document.getElementById('menuSoundEffectsToggle'),
             menuBackgroundMusicToggle: document.getElementById('menuBackgroundMusicToggle'),
+            menuHeader: document.getElementById('menuHeader'),
             // Legacy elements (keeping for backward compatibility)
             helpIcon: document.getElementById('helpIcon'),
             calendarIcon: document.getElementById('calendarIcon'),
@@ -194,6 +209,13 @@ class DailyQuotePuzzle {
             // Initialize Arkadium stub (lightweight version for standalone)
             console.log('🔌 Initializing Arkadium stub...');
             this.arkadium = new ArkadiumIntegration(this);
+
+            // Ensure notification container is attached to body to avoid positioning issues
+            const notifContainer = document.getElementById('achievementNotificationContainer');
+            if (notifContainer && notifContainer.parentElement !== document.body) {
+                console.log('🔧 Reparenting notification container to <body>');
+                document.body.appendChild(notifContainer);
+            }
             console.log('✅ Running in standalone mode with Arkadium stub');
 
             console.log('⚙️ Loading settings...');
@@ -730,7 +752,6 @@ class DailyQuotePuzzle {
                 gameComplete: this.gameComplete,
                 activeWord: this.activeWord ? this.activeWord.original : null,
                 userInput: this.userInput,
-                usedLetters: this.usedLetters,
                 hintsUsed: this.hintsUsedThisPuzzle,
                 unscrambleLastUsed: this.unscrambleLastUsed,
                 timestamp: Date.now()
@@ -985,19 +1006,26 @@ class DailyQuotePuzzle {
         notificationElement.className = 'achievement-notification';
         notificationElement.setAttribute('data-notification-id', notification.id);
 
+        // attempt to show specific achievement icon if available
+        const achievementDef = this.achievementsManager.achievements[notification.achievementId] || {};
+        const icon = achievementDef.icon || '🏆';
+
         notificationElement.innerHTML = `
-            <h4>✓ Achievement Unlocked!</h4>
-            <p>${notification.name}</p>
+            <div class="notif-icon">${icon}</div>
+            <div class="notif-text">
+                <h4>✓ Achievement Unlocked!</h4>
+                <p>${notification.name}</p>
+            </div>
         `;
 
-        // Calculate position based on existing notifications
-        const existingNotifications = document.querySelectorAll('.achievement-notification');
-        const topOffset = 20 + (existingNotifications.length * 120); // 20px from top, 120px spacing between notifications
-
-        notificationElement.style.top = `${topOffset}px`;
-
-        // Add to page
-        document.body.appendChild(notificationElement);
+        // Add to notification container (will be created in HTML)
+        const container = document.getElementById('achievementNotificationContainer');
+        if (container) {
+            container.appendChild(notificationElement);
+        } else {
+            // fallback to body if container missing
+            document.body.appendChild(notificationElement);
+        }
 
         // Show notification
         setTimeout(() => {
@@ -1020,18 +1048,19 @@ class DailyQuotePuzzle {
         notificationElement.className = 'achievement-notification ink-drops-reward';
 
         notificationElement.innerHTML = `
-            <h4>✓ Ink Drops Added!</h4>
-            <p>+${totalReward} ink drops from achievements</p>
+            <div class="notif-icon"><span class="ink-drop-icon">💧</span></div>
+            <div class="notif-text">
+                <h4>✓ Ink Drops Added!</h4>
+                <p>+${totalReward} ink drops from achievements</p>
+            </div>
         `;
 
-        // Calculate position based on existing notifications
-        const existingNotifications = document.querySelectorAll('.achievement-notification');
-        const topOffset = 20 + (existingNotifications.length * 120); // 20px from top, 120px spacing between notifications
-
-        notificationElement.style.top = `${topOffset}px`;
-
-        // Add to page
-        document.body.appendChild(notificationElement);
+        const container = document.getElementById('achievementNotificationContainer');
+        if (container) {
+            container.appendChild(notificationElement);
+        } else {
+            document.body.appendChild(notificationElement);
+        }
 
         // Show notification
         setTimeout(() => {
@@ -1062,27 +1091,21 @@ class DailyQuotePuzzle {
         // Get achievements by category
         const achievementsByCategory = this.achievementsManager.getAchievementsByCategory();
 
-        // Render achievements by category
+        // Render all achievements in one flat grid with category headers as full-width rows
         Object.keys(achievementsByCategory).forEach(category => {
             const categoryAchievements = achievementsByCategory[category];
 
-            // Create category section
-            const categorySection = document.createElement('div');
-            categorySection.className = 'achievement-category';
-            categorySection.innerHTML = `<h3>${category}</h3>`;
+            // Category header spans full grid width
+            const header = document.createElement('h3');
+            header.className = 'achievement-category-header';
+            header.textContent = category;
+            grid.appendChild(header);
 
-            // Create category grid
-            const categoryGrid = document.createElement('div');
-            categoryGrid.className = 'achievements-grid';
-
-            // Add achievements to category
+            // Add achievement cards directly into the single grid
             categoryAchievements.forEach(achievement => {
                 const card = this.createAchievementCard(achievement);
-                categoryGrid.appendChild(card);
+                grid.appendChild(card);
             });
-
-            categorySection.appendChild(categoryGrid);
-            grid.appendChild(categorySection);
         });
 
         // Update achievement counter
@@ -1325,6 +1348,15 @@ class DailyQuotePuzzle {
         return `${year}-${month}-${day}`;
     }
 
+    escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     findTodayQuote() {
         const today = new Date();
         const todayStr = this.formatDate(today);
@@ -1495,11 +1527,45 @@ class DailyQuotePuzzle {
         return lowerWord;
     }
 
+    refreshLetterPool() {
+        // Only refresh if we haven't initialized the pool yet or if there's no pool
+        if (this.globalLetterPool) {
+            console.log('🔄 Letter pool already exists, skipping refresh');
+            return;
+        }
+
+        // Recalculate letter counts from all scrambled words
+        const allLetterCounts = {};
+
+        // Count letters from all scrambled words
+        this.currentQuote.scrambledWords.forEach(word => {
+            word.scrambled.split('').forEach(letter => {
+                const lowerLetter = letter.toLowerCase();
+                allLetterCounts[lowerLetter] = (allLetterCounts[lowerLetter] || 0) + 1;
+            });
+        });
+
+        // Add letters from author if it exists
+        if (this.currentQuote.scrambledAuthor) {
+            this.currentQuote.scrambledAuthor.replace(/[\s.]/g, '').split('').forEach(letter => {
+                const lowerLetter = letter.toLowerCase();
+                allLetterCounts[lowerLetter] = (allLetterCounts[lowerLetter] || 0) + 1;
+            });
+        }
+
+        // Initialize global letter pool for the first time
+        this.globalLetterPool = { ...allLetterCounts };
+        console.log('🔄 Letter pool initialized:', this.globalLetterPool);
+    }
+
     renderQuote() {
         if (!this.currentQuote || !this.currentQuote.text) {
             console.error('❌ Cannot render quote: currentQuote is null or invalid', this.currentQuote);
             return;
         }
+        
+        // Refresh the letter pool when rendering the quote
+        this.refreshLetterPool();
         
         console.log('🎨 Rendering quote:', this.currentQuote.text.substring(0, 50) + '...');
         const words = this.currentQuote.text.split(' ');
@@ -1509,7 +1575,7 @@ class DailyQuotePuzzle {
         if (this.gameComplete) {
             words.forEach((word, index) => {
                 const displayWord = this.getProperCapitalization(word, index, words);
-                html += `<span class="quote-word">${displayWord}</span> `;
+                html += `<span class="quote-word">${this.escapeHtml(displayWord)}</span> `;
             });
         } else {
             // Normal game logic for active puzzles
@@ -1559,19 +1625,19 @@ class DailyQuotePuzzle {
 
                     // Display word with asterisks and punctuation separately
                     const scrambledWordSpan = `<span class="quote-word scrambled ${isActive ? 'active' : ''}"
-                                data-word-index="${index}">${displayText}</span>`;
-                    const punctuationSpan = scrambledWord.punctuation ? `<span class="quote-punctuation">${scrambledWord.punctuation}</span>` : '';
+                                data-word-index="${index}">${this.escapeHtml(displayText)}</span>`;
+                    const punctuationSpan = scrambledWord.punctuation ? `<span class="quote-punctuation">${this.escapeHtml(scrambledWord.punctuation)}</span>` : '';
                     html += `${scrambledWordSpan}${punctuationSpan} `;
                 } else {
                     if (isSolved && scrambledWord) {
                         // For solved words, display the word-only part with proper capitalization
                         const displayWord = this.getProperCapitalization(scrambledWord.originalWordOnly, index, words);
-                        const wordSpan = `<span class="quote-word">${displayWord}</span>`;
-                        const punctuationSpan = scrambledWord.punctuation ? `<span class="quote-punctuation">${scrambledWord.punctuation}</span>` : '';
+                        const wordSpan = `<span class="quote-word">${this.escapeHtml(displayWord)}</span>`;
+                        const punctuationSpan = scrambledWord.punctuation ? `<span class="quote-punctuation">${this.escapeHtml(scrambledWord.punctuation)}</span>` : '';
                         html += `${wordSpan}${punctuationSpan} `;
                     } else {
                         const displayWord = this.getProperCapitalization(word, index, words);
-                        html += `<span class="quote-word">${displayWord}</span> `;
+                        html += `<span class="quote-word">${this.escapeHtml(displayWord)}</span> `;
                     }
                 }
             });
@@ -1646,7 +1712,7 @@ class DailyQuotePuzzle {
 
             const asteriskWords = displayWords.join('   '); // One asterisk per letter with gaps
             this.elements.quoteAuthor.innerHTML = `- <span class="author scrambled ${isActive ? 'active' : ''}"
-                                                        id="authorScrambled">${asteriskWords}</span>`;
+                                                        id="authorScrambled">${this.escapeHtml(asteriskWords)}</span>`;
             const authorElement = document.getElementById('authorScrambled');
             if (authorElement) {
                 this.addMobileTouchHandling(authorElement, () => this.handleAuthorClick(true, true));
@@ -2027,6 +2093,8 @@ class DailyQuotePuzzle {
                 this.elements.definitionBtn.style.opacity = '0.5';
             }
         }
+
+        this.updateQuickResetVisibility();
     }
 
     // Add mobile-specific touch handling
@@ -2105,19 +2173,33 @@ class DailyQuotePuzzle {
     handleLetterClick(letter, index) {
         if (this.isUnscrambling) return;
 
+        if (Date.now() < this.incorrectFeedbackLockUntil) {
+            this.playErrorSound();
+            return;
+        }
+
         // Check if word is complete (either correct or incorrect)
         // For authors, exclude dots from the target length since they're pre-filled
-        const targetLength = this.activeWord.isAuthor ?
-            this.activeWord.original.replace(/\s/g, '').replace(/\./g, '').length :
-            (this.activeWord.originalWordOnly ? this.activeWord.originalWordOnly.length : this.activeWord.original.length);
+        const targetLength = this.getActiveTargetLength();
 
-        const isWordComplete = (this.wordValidationState === 'incorrect' || this.wordValidationState === 'correct') &&
+        const isWordComplete = this.wordValidationState === 'correct' &&
             this.userInput.length === targetLength;
 
         // If word is complete (correct or incorrect), play error sound and do nothing
         if (isWordComplete) {
             this.playErrorSound();
             return;
+        }
+
+        if (this.userInput.length >= targetLength) {
+            this.playErrorSound();
+            return;
+        }
+
+        if (this.wordValidationState === 'incorrect') {
+            this.cancelIncorrectAutoReset();
+            this.wordValidationState = 'pending';
+            this.updateQuickResetVisibility();
         }
 
         // Notify game start on first interaction (if not already started)
@@ -2156,9 +2238,7 @@ class DailyQuotePuzzle {
 
         // For authors, check against length without spaces and dots (dots are pre-filled)
         // For regular words, use word-only length (without punctuation)
-        const targetLengthAfter = this.activeWord.isAuthor ?
-            this.activeWord.original.replace(/\s/g, '').replace(/\./g, '').length :
-            (this.activeWord.originalWordOnly ? this.activeWord.originalWordOnly.length : this.activeWord.original.length);
+        const targetLengthAfter = this.getActiveTargetLength();
 
         if (this.userInput.length === targetLengthAfter) {
             // Validate the entire word using Wordle logic
@@ -2172,6 +2252,64 @@ class DailyQuotePuzzle {
             return [];
         }
         return this.wordCorrectLetters[scrambledWord.original] || [];
+    }
+
+    getActiveTargetLength() {
+        if (!this.activeWord) return 0;
+        if (this.activeWord.isAuthor) {
+            return this.activeWord.original.replace(/\s/g, '').replace(/\./g, '').length;
+        }
+        const wordOnly = this.activeWord.originalWordOnly ? this.activeWord.originalWordOnly : this.activeWord.original;
+        return wordOnly.length;
+    }
+
+    updateQuickResetVisibility() {
+        if (!this.elements.quickResetRow) return;
+        const isIncorrectComplete = this.wordValidationState === 'incorrect' && this.userInput.length === this.getActiveTargetLength();
+        this.elements.quickResetRow.classList.toggle('show', isIncorrectComplete);
+        if (isIncorrectComplete) {
+            this.positionQuickResetButton();
+        } else {
+            this.elements.quickResetRow.classList.remove('below-right');
+        }
+    }
+
+    positionQuickResetButton() {
+        const quickResetRow = this.elements.quickResetRow;
+        const quickResetBtn = this.elements.quickResetWordBtn;
+        const inputArea = this.elements.inputArea;
+        const letterCellsWrap = this.elements.letterCellsWrap;
+        if (!quickResetRow || !quickResetBtn || !inputArea || !letterCellsWrap) return;
+
+        quickResetRow.classList.remove('below-right');
+
+        const inputRect = inputArea.getBoundingClientRect();
+        const wrapRect = letterCellsWrap.getBoundingClientRect();
+        const btnRect = quickResetBtn.getBoundingClientRect();
+        const spaceRight = inputRect.right - wrapRect.right;
+        const minNeeded = btnRect.width + 12;
+
+        if (spaceRight < minNeeded) {
+            quickResetRow.classList.add('below-right');
+        }
+    }
+
+    cancelIncorrectAutoReset() {
+        if (this.incorrectAutoResetTimeout) {
+            clearTimeout(this.incorrectAutoResetTimeout);
+            this.incorrectAutoResetTimeout = null;
+        }
+    }
+
+    scheduleIncorrectAutoReset() {
+        this.cancelIncorrectAutoReset();
+        this.incorrectAutoResetTimeout = setTimeout(() => {
+            const isStillIncorrect = this.wordValidationState === 'incorrect' && this.userInput.length === this.getActiveTargetLength();
+            if (isStillIncorrect) {
+                this.resetInput(true, false);
+            }
+            this.incorrectAutoResetTimeout = null;
+        }, this.incorrectAutoResetDelayMs);
     }
 
     validateWordleStyle() {
@@ -2263,6 +2401,9 @@ class DailyQuotePuzzle {
         if (isCorrect) {
             // Word is correct, complete it
             this.wordValidationState = 'correct';
+            this.cancelIncorrectAutoReset();
+            this.incorrectFeedbackLockUntil = 0;
+            this.updateQuickResetVisibility();
             setTimeout(() => {
                 if (this.activeWord.isAuthor) {
                     this.authorSolved = true;
@@ -2289,12 +2430,11 @@ class DailyQuotePuzzle {
                 }, 1200);
             }, 500); // Short delay to show the colors before completing
         } else {
-            // Word is incorrect, show feedback briefly
-            // Player can manually reset if needed using the reset button
+            // Word is incorrect: keep feedback visible, show quick reset, then auto-reset if idle
             this.wordValidationState = 'incorrect';
-            setTimeout(() => {
-                // No automatic reset - player can review feedback and decide to reset manually
-            }, 1500); // Show feedback for 1.5 seconds
+            this.incorrectFeedbackLockUntil = Date.now() + this.incorrectFeedbackLockMs;
+            this.updateQuickResetVisibility();
+            this.cancelIncorrectAutoReset();
         }
     }
 
@@ -2535,13 +2675,15 @@ class DailyQuotePuzzle {
     handleKeyDown(event) {
         if (!this.activeWord || this.isUnscrambling) return;
 
+        if (Date.now() < this.incorrectFeedbackLockUntil) {
+            return;
+        }
+
         // Check if word is complete (either correct or incorrect)
         // For authors, exclude dots from target length since they're pre-filled
-        const targetLength = this.activeWord.isAuthor ?
-            this.activeWord.original.replace(/\s/g, '').replace(/\./g, '').length :
-            (this.activeWord.originalWordOnly ? this.activeWord.originalWordOnly.length : this.activeWord.original.length);
+        const targetLength = this.getActiveTargetLength();
 
-        const isWordComplete = (this.wordValidationState === 'incorrect' || this.wordValidationState === 'correct') &&
+        const isWordComplete = this.wordValidationState === 'correct' &&
             this.userInput.length === targetLength;
 
         if (event.key === 'Backspace') {
@@ -2562,15 +2704,22 @@ class DailyQuotePuzzle {
         // Pass -1 as index to indicate it's an extra letter
         this.handleLetterClick(event.key, -1);
     }
-
     handleBackspace() {
-        console.log('⌨️ Backspace triggered');
         if (!this.activeWord || this.userInput.length === 0 || this.isUnscrambling) {
-            console.log('❌ Backspace blocked - no active word, no input, or unscrambling');
             return;
         }
 
-        console.log('✅ Backspace allowed, playing sound');
+        if (Date.now() < this.incorrectFeedbackLockUntil) {
+            this.playErrorSound();
+            return;
+        }
+
+        if (this.wordValidationState === 'incorrect') {
+            this.cancelIncorrectAutoReset();
+            this.wordValidationState = 'pending';
+            this.updateQuickResetVisibility();
+        }
+
         this.playBackspaceSound();
 
         // Return the last letter to the global pool
@@ -2586,7 +2735,6 @@ class DailyQuotePuzzle {
 
         this.userInput = this.userInput.length > 0 ? this.userInput.slice(0, -1) : '';
         this.usedLetters = this.usedLetters.length > 0 ? this.usedLetters.slice(0, -1) : [];
-        // Also remove the last feedback entry
         if (this.letterFeedback && this.letterFeedback.length > 0) {
             this.letterFeedback.pop();
         }
@@ -2595,9 +2743,11 @@ class DailyQuotePuzzle {
         // Save current state after backspace
         this.saveCurrentPuzzleState();
     }
-
     resetInput(returnLettersToPool = true, playSound = true) {
         if (this.isUnscrambling) return;
+
+        this.cancelIncorrectAutoReset();
+        this.incorrectFeedbackLockUntil = 0;
 
         // Only play sound and return letters if there are actually letters in the input
         if (this.userInput && this.userInput.length > 0) {
@@ -2617,14 +2767,14 @@ class DailyQuotePuzzle {
 
         this.userInput = '';
         this.usedLetters = [];
-        this.letterFeedback = []; // Reset letter feedback
-        this.wordValidationState = 'pending'; // Reset validation state
+        this.letterFeedback = [];
+        this.wordValidationState = 'pending';
         this.renderInputArea();
+        this.updateQuickResetVisibility();
 
         // Save current state after reset
         this.saveCurrentPuzzleState();
     }
-
     startUnscrambleCooldown() {
         this.unscrambleLastUsed = Date.now();
         this.elements.unscrambleBtn.disabled = true;
@@ -2767,7 +2917,7 @@ class DailyQuotePuzzle {
                     <div class="modal-body">
                         <p>Select which letter you want to reveal in all words:</p>
                         <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
-                            <i class="fas fa-tint"></i> This will cost 1 ink drop 
+                            <span class="ink-drop-icon">💧</span> This will cost 1 ink drop 
                             <span style="color: ${hasInkDrops ? '#28a745' : '#dc3545'}; font-weight: bold;">
                                 (You have ${this.inkDrops})
                             </span>
@@ -2931,39 +3081,26 @@ class DailyQuotePuzzle {
             return; // Still in cooldown
         }
 
-        // Show rewarded ad before unscrambling
-        try {
-            console.log('🎬 Showing rewarded ad for unscramble...');
-
-            // Track unscramble attempt
-            this.arkadium.trackEvent('unscramble_attempted', {
-                word: this.activeWord.original,
-                isAuthor: this.activeWord.isAuthor
-            });
-
-            await this.arkadium.showRewardedAd();
-            console.log('✅ Rewarded ad completed, proceeding with unscramble');
-
-            // Track successful unscramble
-            this.arkadium.trackEvent('unscramble_completed', {
-                word: this.activeWord.original,
-                isAuthor: this.activeWord.isAuthor
-            });
-
-        } catch (error) {
-            console.log('❌ Rewarded ad failed or was cancelled:', error);
-            // In development mode or if ad fails, still allow unscramble
-            if (!this.arkadium.isDevelopmentMode()) {
-                console.log('🎮 Ad failed, but allowing unscramble in development mode');
-            }
-
-            // Track unscramble without ad
-            this.arkadium.trackEvent('unscramble_no_ad', {
-                word: this.activeWord.original,
-                isAuthor: this.activeWord.isAuthor,
-                error: error.message
-            });
+        // Unscramble costs 3 ink drops
+        const cost = 3;
+        if (this.inkDrops < cost) {
+            // Not enough ink drops — show message
+            this.showNotEnoughDropsMessage(cost);
+            return;
         }
+
+        // Spend cost drops
+        for (let i = 0; i < cost; i++) {
+            await this.spendInkDrop();
+        }
+
+        console.log(`💧 ${cost} ink drops spent for unscramble`);
+
+        // Track unscramble
+        this.arkadium.trackEvent('unscramble_completed', {
+            word: this.activeWord.original,
+            isAuthor: this.activeWord.isAuthor
+        });
 
         this.isUnscrambling = true;
         this.elements.resetBtn.disabled = true;
@@ -3634,8 +3771,9 @@ class DailyQuotePuzzle {
                     this.solvedWords = new Set(savedState.solvedWords || []);
                     this.authorSolved = savedState.authorSolved || false;
                     this.gameComplete = savedState.gameComplete || false;
-                    this.userInput = savedState.userInput || '';
-                    this.usedLetters = savedState.usedLetters || [];
+                    // Clear user input and feedback - start fresh on reload
+                    this.userInput = '';
+                    this.usedLetters = []; // Reset usedLetters - it's only for unscramble feature
                     this.letterFeedback = []; // Clear letter feedback when restoring state
                     this.hintsUsedThisPuzzle = savedState.hintsUsed || 0;
 
@@ -3901,6 +4039,11 @@ class DailyQuotePuzzle {
         if (this.elements.backspaceBtn) {
             this.addMobileTouchHandling(this.elements.backspaceBtn, () => this.handleBackspace());
         }
+        if (this.elements.quickResetWordBtn) {
+            this.addMobileTouchHandling(this.elements.quickResetWordBtn, () => {
+                this.resetInput();
+            });
+        }
         if (this.elements.unscrambleBtn) {
             this.addMobileTouchHandling(this.elements.unscrambleBtn, async () => {
                 try {
@@ -3931,6 +4074,10 @@ class DailyQuotePuzzle {
             if (e.key === 'Escape' && this.elements.slideMenu && this.elements.slideMenu.classList.contains('active')) {
                 this.closeMenu();
             }
+        });
+
+        window.addEventListener('resize', () => {
+            this.positionQuickResetButton();
         });
 
         // Calendar functionality
@@ -4061,15 +4208,18 @@ class DailyQuotePuzzle {
             });
         }
 
-        // Ink drops click handler
-        if (this.elements.inkDropsContainer) {
-            this.addMobileTouchHandling(this.elements.inkDropsContainer, async () => {
-                if (this.inkDrops === 0) {
-                    await this.showInkDropsRefillModal();
-                } else {
-                    // Show info about ink drops
-                    this.showInkDropsInfo();
+        // + button for getting drops when at 0
+        const plusBtn = document.getElementById('inkDropsPlusBtn');
+        if (plusBtn) {
+            console.log('🔧 Setting up + button click handler');
+            // Direct click handler only
+            plusBtn.addEventListener('click', (e) => {
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
                 }
+                console.log('➕ + button clicked, showing drops prompt');
+                this.showGetDropsPrompt();
             });
         }
 
@@ -5523,7 +5673,7 @@ Check console for detailed logs.`;
             definitionHtml += `
                 <div style="background: #f0f8ff; padding: 8px; border-radius: 4px; margin-bottom: 15px; font-size: 12px; color: #666;">
                     <i class="fas fa-info-circle"></i> 
-                    Showing definition for "${entry.baseWord}" (base form of "${entry.originalWord}")
+                    Showing definition for "${this.escapeHtml(entry.baseWord)}" (base form of "${this.escapeHtml(entry.originalWord)}")
                 </div>
             `;
         }
@@ -5585,7 +5735,7 @@ Check console for detailed logs.`;
                         definitionHtml += `
                             <div style="margin-bottom: 15px;">
                                 <div style="font-weight: bold; color: #007bff; margin-bottom: 5px;">
-                                    ${meaning.partOfSpeech}
+                                    ${this.escapeHtml(meaning.partOfSpeech)}
                                 </div>
                         `;
                         
@@ -5593,8 +5743,8 @@ Check console for detailed logs.`;
                         validDefinitions.slice(0, 2).forEach((def) => {
                             definitionHtml += `
                                 <div style="margin-bottom: 8px;">
-                                    <div>${def.definition}</div>
-                                    ${def.example ? `<div style="font-style: italic; color: #666; margin-top: 4px;">"${def.example}"</div>` : ''}
+                                    <div>${this.escapeHtml(def.definition)}</div>
+                                    ${def.example ? `<div style="font-style: italic; color: #666; margin-top: 4px;">"${this.escapeHtml(def.example)}"</div>` : ''}
                                 </div>
                             `;
                         });
@@ -5753,18 +5903,19 @@ Check console for detailed logs.`;
             notificationElement.className = 'achievement-notification daily-login-bonus';
 
             notificationElement.innerHTML = `
-                <h4>✓ Daily Login Bonus!</h4>
-                <p>+${bonusAmount} ink drops</p>
+                <div class="notif-icon">💧</div>
+                <div class="notif-text">
+                    <h4>✓ Daily Login Bonus!</h4>
+                    <p>+${bonusAmount} ink drops</p>
+                </div>
             `;
 
-            // Calculate position based on existing notifications
-            const existingNotifications = document.querySelectorAll('.achievement-notification');
-            const topOffset = 20 + (existingNotifications.length * 120); // 20px from top, 120px spacing between notifications
-
-            notificationElement.style.top = `${topOffset}px`;
-
-            // Add to page
-            document.body.appendChild(notificationElement);
+            const container = document.getElementById('achievementNotificationContainer');
+            if (container) {
+                container.appendChild(notificationElement);
+            } else {
+                document.body.appendChild(notificationElement);
+            }
 
             // Show notification
             setTimeout(() => {
@@ -5801,28 +5952,34 @@ Check console for detailed logs.`;
 
     updateInkDropsDisplay() {
         if (this.elements.inkDropsCount) {
-            // Update visual state based on ink drops count
             const container = this.elements.inkDropsContainer;
             const display = container.querySelector('.ink-drops-display');
-            const refillButton = container.querySelector('.ink-drops-refill');
+            const plusBtn = document.getElementById('inkDropsPlusBtn');
 
             display.classList.remove('low', 'empty');
 
             if (this.inkDrops === 0) {
-                // Hide normal display and show refill button when at 0 drops
-                display.style.display = 'none';
-                if (refillButton) {
-                    refillButton.style.display = 'flex';
-                    refillButton.title = 'Watch an ad to get 3 ink drops!';
+                // Show 0 count and the + button
+                display.style.display = 'flex';
+                this.elements.inkDropsCount.textContent = '0';
+                display.classList.add('empty');
+
+                // Show countdown in title
+                const timeUntilNext = this.getTimeUntilNextDay();
+                const hours = Math.floor(timeUntilNext.hours);
+                const minutes = Math.floor(timeUntilNext.minutes);
+                display.title = `No drops left. New drops in ${hours}h ${minutes}m`;
+
+                if (plusBtn) {
+                    plusBtn.style.display = 'flex';
                 }
             } else {
-                // Show normal display and hide refill button
+                // Show normal display, hide + button
                 display.style.display = 'flex';
-                if (refillButton) {
-                    refillButton.style.display = 'none';
+                if (plusBtn) {
+                    plusBtn.style.display = 'none';
                 }
 
-                // Show normal count
                 this.elements.inkDropsCount.textContent = this.inkDrops;
                 this.elements.inkDropsCount.style.fontSize = '';
                 this.elements.inkDropsCount.style.fontWeight = 'bold';
@@ -5909,6 +6066,172 @@ Check console for detailed logs.`;
         this.updateInkDropsDisplay();
         await this.saveInkDrops();
         console.log(`💧 Refilled ${amount} ink drops!`);
+    }
+
+    showGetDropsPrompt() {
+        console.log('💧 showGetDropsPrompt called');
+        const timeUntilNext = this.getTimeUntilNextDay();
+        const hours = Math.floor(timeUntilNext.hours);
+        const minutes = Math.floor(timeUntilNext.minutes);
+
+        // Check ad cooldown (30 minutes)
+        const timeSinceLastAd = Date.now() - this.adForDropLastUsed;
+        const adAvailable = timeSinceLastAd >= this.adForDropCooldown;
+        const adCooldownMin = adAvailable ? 0 : Math.ceil((this.adForDropCooldown - timeSinceLastAd) / 60000);
+
+        console.log(`💧 Ad available: ${adAvailable}, cooldown: ${adCooldownMin}min`);
+
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.id = 'getDropsModal';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 360px; padding: 24px;">
+                <div style="text-align: center;">
+                    <div style="font-size: 36px; margin-bottom: 12px;"><span class="ink-drop-icon">💧</span></div>
+                    <h3 style="margin: 0 0 8px 0; font-size: 18px; color: #222;">Get More Drops</h3>
+                    <p style="font-size: 14px; color: #666; margin: 0 0 20px 0;">
+                        New daily drops in ${hours}h ${minutes}m
+                    </p>
+                    
+                    ${adAvailable ? `
+                        <p style="font-size: 15px; color: #444; margin: 0 0 16px 0;">
+                            Watch an ad to earn 1 ink drop!
+                        </p>
+                        <p style="font-size: 12px; color: #999; margin: 0 0 16px 0;">
+                            You can watch another ad in 30 minutes.
+                        </p>
+                        <div style="display: flex; gap: 10px; justify-content: center;">
+                            <button id="confirmAdBtn" style="background: #222; color: white; border: none; padding: 12px 28px; font-size: 15px; cursor: pointer; border-radius: 6px; font-weight: 600;">
+                                <i class="fas fa-play"></i> Watch Ad
+                            </button>
+                            <button id="cancelAdBtn" style="background: #eee; color: #444; border: none; padding: 12px 20px; font-size: 15px; cursor: pointer; border-radius: 6px;">
+                                Cancel
+                            </button>
+                        </div>
+                    ` : `
+                        <p style="font-size: 14px; color: #666;">
+                            Next ad available in:
+                        </p>
+                        <div style="font-size: 24px; font-weight: 900; color: #222; margin: 12px 0;">
+                            ${adCooldownMin}min
+                        </div>
+                        <button id="cancelAdBtn" style="background: #eee; color: #444; border: none; padding: 10px 20px; font-size: 15px; cursor: pointer; border-radius: 6px;">
+                            OK
+                        </button>
+                    `}
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        console.log('💧 Modal appended to body');
+
+        // Use showModal() to properly display it
+        this.showModal(modal);
+        console.log('💧 showModal() called');
+
+        const confirmBtn = modal.querySelector('#confirmAdBtn');
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', async () => {
+                console.log('💧 Watch Ad button clicked');
+                this.hideModal(modal);
+                setTimeout(() => {
+                    modal.remove();
+                    this.watchAdForDrop();
+                }, 300);
+            });
+        }
+
+        const cancelBtn = modal.querySelector('#cancelAdBtn');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                console.log('💧 Cancel button clicked');
+                this.hideModal(modal);
+                setTimeout(() => modal.remove(), 300);
+            });
+        }
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                console.log('💧 Modal overlay clicked');
+                this.hideModal(modal);
+                setTimeout(() => modal.remove(), 300);
+            }
+        });
+    }
+
+    async watchAdForDrop() {
+        try {
+            console.log('📹 Attempting to show rewarded ad...');
+            await this.arkadium.showRewardedAd();
+        } catch (e) {
+            console.log('📹 Ad not available or skipped, but proceeding in development');
+            // Stub auto-completes in development
+        }
+
+        // Record the time for cooldown
+        this.adForDropLastUsed = Date.now();
+        await this.refillInkDrops(1);
+        await this.saveInkDrops();
+
+        const notification = document.createElement('div');
+        notification.className = 'achievement-notification ink-drops-refill show';
+        notification.innerHTML = `
+            <div class="notif-icon"><span class="ink-drop-icon">💧</span></div>
+            <div class="notif-text">
+                <h4>+1 Ink Drop!</h4>
+                <p>Next ad in 30 minutes</p>
+            </div>
+        `;
+        const container = document.getElementById('achievementNotificationContainer');
+        if (container) {
+            container.appendChild(notification);
+        } else {
+            document.body.appendChild(notification);
+        }
+        
+        notification.classList.add('show');
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+
+    showAdCooldownMessage(minutesLeft) {
+        const notification = document.createElement('div');
+        notification.className = 'achievement-notification show';
+        notification.innerHTML = `<h4>⏳ Cooldown</h4><p>Next ad available in ${minutesLeft} min</p>`;
+        document.body.appendChild(notification);
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => notification.remove(), 300);
+        }, 2500);
+    }
+
+    showNotEnoughDropsMessage(needed) {
+        const timeUntilNext = this.getTimeUntilNextDay();
+        const hours = Math.floor(timeUntilNext.hours);
+        const minutes = Math.floor(timeUntilNext.minutes);
+        
+        const notification = document.createElement('div');
+        notification.className = 'achievement-notification error show';
+        notification.innerHTML = `
+            <div class="notif-icon"><span class="ink-drop-icon">💧</span></div>
+            <div class="notif-text">
+                <h4>Not Enough Drops</h4>
+                <p>Need ${needed}, you have ${this.inkDrops}.<br>New drops in ${hours}h ${minutes}m</p>
+            </div>
+        `;
+        const container = document.getElementById('achievementNotificationContainer');
+        if (container) {
+            container.appendChild(notification);
+        } else {
+            document.body.appendChild(notification);
+        }
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => notification.remove(), 300);
+        }, 3500);
     }
 
     // Debug method to give ink drops for testing
@@ -6182,11 +6505,18 @@ Check console for detailed logs.`;
         const notification = document.createElement('div');
         notification.className = 'achievement-notification ink-drops-refill show';
         notification.innerHTML = `
-            <h4>💧 Ink Drops Refilled!</h4>
-            <p>You received 3 ink drops</p>
+            <div class="notif-icon">💧</div>
+            <div class="notif-text">
+                <h4>Ink Drops Refilled!</h4>
+                <p>You received 3 ink drops</p>
+            </div>
         `;
-
-        document.body.appendChild(notification);
+        const container = document.getElementById('achievementNotificationContainer');
+        if (container) {
+            container.appendChild(notification);
+        } else {
+            document.body.appendChild(notification);
+        }
 
         setTimeout(() => {
             notification.classList.remove('show');
@@ -6204,11 +6534,18 @@ Check console for detailed logs.`;
         notification.className = 'achievement-notification show';
         notification.style.background = '#dc3545';
         notification.innerHTML = `
-            <h4>❌ Ad Unavailable</h4>
-            <p>Unable to show ad. Please try again later.</p>
+            <div class="notif-icon">❌</div>
+            <div class="notif-text">
+                <h4>Ad Unavailable</h4>
+                <p>Unable to show ad. Please try again later.</p>
+            </div>
         `;
-
-        document.body.appendChild(notification);
+        const container = document.getElementById('achievementNotificationContainer');
+        if (container) {
+            container.appendChild(notification);
+        } else {
+            document.body.appendChild(notification);
+        }
 
         setTimeout(() => {
             notification.classList.remove('show');
@@ -6328,8 +6665,8 @@ window.testRewardedAd = function () {
     } else {
         console.log('❌ Game or Arkadium integration not available');
     }
-}; w
-indow.clearGameData = function () {
+};
+window.clearGameData = function () {
     if (window.game && window.game.arkadium) {
         // Clear all stored data
         localStorage.clear();
@@ -6376,8 +6713,8 @@ window.initializeWithDefaults = function () {
     localStorage.setItem('quotePuzzleUserData', JSON.stringify(defaultData));
     console.log('✅ Default data initialized');
     console.log('🔄 Please refresh the page');
-}; w
-indow.debugPersistence = async function () {
+};
+window.debugPersistence = async function () {
     console.log('🔍 Testing Arkadium persistence...');
 
     if (window.game && window.game.arkadium) {
@@ -6400,8 +6737,8 @@ indow.debugPersistence = async function () {
     } else {
         console.log('❌ Game or Arkadium integration not available');
     }
-}; wi
-ndow.debugAchievements = function () {
+};
+window.debugAchievements = function () {
     console.log('🏆 Debugging Achievements System...');
 
     if (window.game && window.game.achievementsManager) {
@@ -6482,7 +6819,7 @@ window.fixAchievements = async function () {
         console.error('❌ Game or achievements manager not available');
     }
 };
-estSandboxPersistence = async function () {
+window.testSandboxPersistence = async function () {
     console.log('🧪 Testing Sandbox Persistence...');
 
     if (window.game && window.game.arkadium) {
@@ -6517,8 +6854,8 @@ estSandboxPersistence = async function () {
     } else {
         console.log('❌ Game or Arkadium integration not available');
     }
-}; wi
-ndow.testAchievementPersistence = async function () {
+};
+window.testAchievementPersistence = async function () {
     console.log('🧪 Testing Achievement Persistence in Sandbox...');
 
     if (window.game && window.game.achievementsManager) {

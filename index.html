@@ -202,36 +202,43 @@
             right: 0;
             transform: translateY(-50%);
             z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: transparent;
+            padding: 0;
         }
 
         .ink-drops-display {
             display: flex;
             align-items: center;
             gap: 4px;
-            background: #fff;
-            border: 1px solid #222;
-            padding: 6px 12px;
+            background: transparent;
+            border: none;
+            padding: 0;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 18px;
             color: #222;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            transition: all 0.15s ease;
-            cursor: pointer;
-            transform-origin: center;
+            box-shadow: none;
+            cursor: default;
             position: relative;
             overflow: hidden;
         }
 
         .ink-drops-display:hover {
-            background: #222;
-            color: white;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+            background: transparent;
+            color: #222;
+            box-shadow: none;
         }
 
         .ink-drop-icon {
-            font-size: 14px;
-            filter: grayscale(1) brightness(0);
+            font-size: 18px;
+            filter: grayscale(100%) brightness(0%) !important;
+            /* vertically center when used inline with numbers/text */
+            vertical-align: middle;
+            position: relative;
+            top: -1px; /* lift slightly for optical alignment */
+            display: inline-block;
         }
 
         .ink-drops-count {
@@ -243,22 +250,30 @@
 
         /* Low ink drops warning */
         .ink-drops-display.low {
-            border-color: #6c757d;
-            background: rgba(108, 117, 125, 0.1);
+            background: transparent;
             color: #495057;
         }
 
         .ink-drops-display.empty {
-            border-color: #6c757d;
-            background: rgba(108, 117, 125, 0.1);
+            background: transparent;
             color: #495057;
             animation: pulse 2s infinite;
         }
 
         .ink-drops-display.empty .ink-drops-count {
-            font-size: 11px;
+            font-size: 18px;
             font-weight: bold;
             color: #495057;
+        }
+
+        /* helper for displaying currency costs on buttons */
+        .cost {
+            font-size: 13px;
+            margin-left: 4px;
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            line-height: 1; /* keep icon centered with digits */
         }
 
         /* Ink Drops Refill Button */
@@ -299,6 +314,26 @@
 
         .ink-drops-refill i {
             font-size: 12px;
+        }
+
+        /* + Button shown when drops are 0 */
+        .ink-drops-plus-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: none;
+            padding: 0 4px;
+            font-weight: 900;
+            font-size: 32px;
+            color: #222;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            flex-shrink: 0;
+        }
+
+        .ink-drops-plus-btn:hover {
+            transform: scale(1.15);
         }
 
         @keyframes pulse {
@@ -802,6 +837,7 @@
             transition: opacity 0.3s ease-out;
             flex-shrink: 0;
             margin-top: auto;
+            position: relative;
         }
 
         .input-area.show {
@@ -817,11 +853,25 @@
             letter-spacing: 1px;
         }
 
+        .letter-input-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 30px;
+            position: relative;
+        }
+
+        .letter-cells-wrap {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+        }
+
         .letter-cells {
             display: flex;
             justify-content: center;
             gap: 12px;
-            margin-bottom: 30px;
+            margin-bottom: 0;
             flex-wrap: wrap;
         }
 
@@ -1113,6 +1163,30 @@
             justify-content: center;
             gap: 10px;
             margin-top: 20px;
+        }
+
+        .quick-reset-row {
+            display: none;
+            position: absolute;
+            left: calc(100% + 10px);
+            top: 50%;
+            transform: translateY(-50%);
+            align-items: center;
+        }
+
+        .quick-reset-row.show {
+            display: flex;
+        }
+
+        .quick-reset-row.below-right {
+            left: auto;
+            right: 0;
+            top: calc(100% + 8px);
+            transform: none;
+        }
+
+        .quick-reset-btn {
+            white-space: nowrap;
         }
 
         .control-btn {
@@ -1512,7 +1586,7 @@
             background: white;
             border-radius: 8px;
             width: 90%;
-            max-width: 500px;
+            max-width: 700px;
             padding: 30px;
             box-shadow: 0 5px 25px rgba(0, 0, 0, 0.3);
             position: relative;
@@ -1949,6 +2023,57 @@
             font-weight: bold;
         }
 
+        .help-section-title {
+            margin-top: 18px;
+            margin-bottom: 10px;
+            font-size: 18px;
+            font-weight: 700;
+            color: #222;
+        }
+
+        .wordle-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            margin-top: 10px;
+            margin-bottom: 8px;
+            padding: 8px 10px;
+            background: #f7f7f7;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+
+        .legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #333;
+            white-space: nowrap;
+        }
+
+        .legend-swatch {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            border: 1px solid rgba(0, 0, 0, 0.2);
+            display: inline-block;
+        }
+
+        .legend-swatch.correct {
+            background: #538d4e;
+        }
+
+        .legend-swatch.present {
+            background: #b59f3b;
+        }
+
+        .legend-swatch.absent {
+            background: #3a3a3c;
+        }
+
         /* Stats Modal Styles */
         .stats-content {
             text-align: center;
@@ -2032,8 +2157,10 @@
 
         .achievements-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            /* ensure all cards align to the top of their cells */
+            align-items: start;
             margin-bottom: 20px;
             /* Mobile improvements */
             touch-action: manipulation;
@@ -2042,14 +2169,18 @@
         .achievement-card {
             background: #f9f9f9;
             border: 2px solid #ddd;
-            border-radius: 12px;
-            padding: 20px;
+            border-radius: 10px;
+            padding: 12px;
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
             /* Mobile improvements */
             touch-action: manipulation;
             -webkit-tap-highlight-color: transparent;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 160px;
         }
 
         .achievement-card:hover {
@@ -2096,13 +2227,13 @@
         .achievement-header {
             display: flex;
             align-items: center;
-            gap: 15px;
-            margin-bottom: 15px;
+            gap: 10px;
+            margin-bottom: 10px;
         }
 
         .achievement-icon {
-            font-size: 32px;
-            width: 50px;
+            font-size: 24px;
+            width: 36px;
             text-align: center;
             color: #333;
             filter: grayscale(1) brightness(1.5);
@@ -2113,17 +2244,22 @@
         }
 
         .achievement-info h3 {
-            margin: 0 0 5px 0;
-            font-size: 18px;
+            margin: 0 0 3px 0;
+            font-size: 15px;
             font-weight: 600;
             color: #222;
         }
 
+        /* ensure info section expands to fill card height when needed */
+        .achievement-info {
+            flex: 1;
+        }
+
         .achievement-info p {
             margin: 0;
-            font-size: 14px;
+            font-size: 13px;
             color: #666;
-            line-height: 1.4;
+            line-height: 1.3;
         }
 
         .achievement-reward {
@@ -2132,6 +2268,18 @@
             /* Mobile improvements */
             position: relative;
             z-index: 10;
+        }
+
+        /* category header inserted into grid
+           spans full width and adds visual separation */
+        .achievement-category-header {
+            grid-column: 1 / -1;
+            margin: 24px 0 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #444;
+            padding-left: 4px;
+            border-bottom: 1px solid #ddd;
         }
 
         .ink-drops-reward {
@@ -2293,7 +2441,8 @@
 
         .achievement-category .achievements-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
             gap: 15px;
         }
 
@@ -2306,36 +2455,77 @@
         }
 
         /* Achievement notification */
+            /* Notification container now handles positioning & stacking */
+            .achievement-notification-container {
+                position: fixed !important;
+                top: 20px;
+                right: 20px;
+                left: auto;
+                transform: none;
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end; /* stack notifications toward the right edge */
+                gap: 10px;
+                z-index: 10010 !important; /* ensure above everything else */
+                /* let clicks pass through to elements below (e.g. drop counter) */
+                pointer-events: none;
+                /* notifications simply stack up; no scrollbar needed */
+                max-height: none;
+                overflow: visible;
+            }
+
         .achievement-notification {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #333;
+            background: rgba(0, 0, 0, 0.9);
             color: white;
-            padding: 15px 20px;
+            padding: 12px 16px;
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            z-index: 10000;
-            transform: translateX(100%);
-            transition: transform 0.3s ease;
-            max-width: 300px;
-            /* Mobile improvements */
-            -webkit-transform: translateX(100%);
-            -webkit-transition: -webkit-transform 0.3s ease;
-            /* Ensure notifications work on all mobile devices */
-            -webkit-backface-visibility: hidden;
-            backface-visibility: hidden;
-            will-change: transform;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 280px;
+            opacity: 0;
+            transform: translateX(400px); /* slide in from right */
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            pointer-events: auto; /* notifications themselves are clickable */
+        }
+
+        /* error variant (red background) */
+        .achievement-notification.error {
+            background: #dc3545;
         }
 
         .achievement-notification.show {
+            opacity: 1;
             transform: translateX(0);
+        }
+
+        /* little pop animation for the icon when notification appears */
+        .achievement-notification.show .notif-icon {
+            animation: pop 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        @keyframes pop {
+            0% { transform: scale(0); opacity: 0; }
+            50% { transform: scale(1.3); }
+            100% { transform: scale(1); opacity: 1; }
         }
 
         .achievement-notification h4 {
             margin: 0 0 5px 0;
             font-size: 16px;
             font-weight: 600;
+        }
+
+        /* small icon shown next to notification text */
+        .achievement-notification .notif-icon {
+            font-size: 28px;
+            width: 36px;
+            text-align: center;
+        }
+
+        .achievement-notification .notif-text {
+            flex: 1;
         }
 
         .achievement-notification p {
@@ -2381,18 +2571,16 @@
                 font-size: 13px;
             }
 
-            .achievement-notification {
+            /* mobile positioning: keep top-right, just adjust padding */
+            .achievement-notification-container {
                 top: 10px;
                 right: 10px;
-                left: 10px;
-                max-width: none;
-                transform: translateY(-100%);
-                transition: transform 0.3s ease;
-                /* Mobile-specific notification fixes */
-                position: fixed !important;
-                z-index: 10001 !important;
-                -webkit-transform: translateY(-100%);
-                -webkit-transition: -webkit-transform 0.3s ease;
+            }
+            .achievement-notification {
+                width: auto;
+                min-width: 260px;
+                max-width: 85vw;
+            }
             }
 
             .achievement-notification.show {
@@ -2443,14 +2631,15 @@
                 touch-action: manipulation;
             }
 
-            /* Mobile notification stacking */
-            .achievement-notification+.achievement-notification {
-                top: 80px;
+            /* mobile category headers should be slightly larger and no border */
+            .achievement-category-header {
+                margin: 20px 0 6px;
+                font-size: 1.2rem;
+                border-bottom: none;
+                padding-left: 0;
             }
 
-            .achievement-notification+.achievement-notification+.achievement-notification {
-                top: 150px;
-            }
+            /* container handles stacking via gap */
 
             /* Mobile notification container */
             .mobile-notification-container {
@@ -2771,6 +2960,11 @@
             .ink-drops-refill i {
                 font-size: 10px;
             }
+
+            .ink-drops-plus-btn {
+                padding: 3px 6px;
+                font-size: 12px;
+            }
         }
 
         .achievement-footer {
@@ -2796,7 +2990,6 @@
             font-size: 11px;
             padding: 4px 8px;
             max-width: 180px;
-        }
         }
 
         @media (max-width: 480px) {
@@ -3900,7 +4093,7 @@
     <!-- Slide-out Menu -->
     <div class="slide-menu" id="slideMenu">
         <div class="menu-header">
-            <h3>Menu</h3>
+            <h3 id="menuHeader">Menu</h3>
             <button class="close-menu" id="closeMenu">
                 <i class="fas fa-times"></i>
             </button>
@@ -4004,14 +4197,12 @@
                     <img src="assets/quotle-title.png" alt="Quotle" class="quotle-title">
                 </div>
                 <div class="ink-drops-container" id="inkDropsContainer">
+                    <div class="ink-drops-plus-btn" id="inkDropsPlusBtn" style="display: none;" title="Get more drops">
+                        <span>+</span>
+                    </div>
                     <div class="ink-drops-display" id="inkDropsDisplay">
                         <span class="ink-drop-icon">💧</span>
                         <span class="ink-drops-count" id="inkDropsCount">0</span>
-                    </div>
-                    <div class="ink-drops-refill" id="inkDropsRefill" style="display: none;">
-                        <i class="fas fa-play"></i>
-                        <span>Refill</span>
-                        <div class="ad-indicator">AD</div>
                     </div>
                 </div>
             </div>
@@ -4062,7 +4253,16 @@
 
         <!-- Input Area for Word Unscrambling -->
         <div class="input-area" id="inputArea">
-            <div class="letter-cells" id="letterCells"></div>
+            <div class="letter-input-row" id="letterInputRow">
+                <div class="letter-cells-wrap" id="letterCellsWrap">
+                    <div class="letter-cells" id="letterCells"></div>
+                    <div class="quick-reset-row" id="quickResetRow">
+                        <button class="control-btn quick-reset-btn" id="quickResetWordBtn">
+                            <i class="fas fa-rotate-left"></i> Try Again
+                        </button>
+                    </div>
+                </div>
+            </div>
             <div class="available-letters" id="availableLetters"></div>
             <div class="input-controls">
                 <button class="control-btn" id="resetBtn">
@@ -4072,12 +4272,17 @@
                     <i class="fas fa-backspace"></i> Back
                 </button>
                 <button class="control-btn unscramble-btn" id="unscrambleBtn">
-                    <i class="fas fa-play"></i> Solve Word
-                    <div class="ad-indicator">AD</div>
+                    <i class="fas fa-play"></i> Solve Word 
+                    <span class="cost" style="opacity:0.7;">
+                        (<span class="ink-drop-icon">💧</span>3)
+                    </span>
                     <div class="cooldown-timer" id="unscrambleTimer"></div>
                 </button>
                 <button class="control-btn" id="revealLetterBtn">
-                    <i class="fas fa-lightbulb"></i> Reveal Letter
+                    <i class="fas fa-lightbulb"></i> Reveal Letter 
+                    <span class="cost" style="opacity:0.7;">
+                        (<span class="ink-drop-icon">💧</span>1)
+                    </span>
                 </button>
                 <button class="control-btn" id="definitionBtn" style="display: none;">
                     <i class="fas fa-book"></i> Definition
@@ -4129,19 +4334,20 @@
                 <button class="close-modal" id="closeWelcome">&times;</button>
             </div>
             <div class="help-content">
-                <p>Complete the missing words in the daily quote to reveal the inspirational message!</p>
+                <p>Solve the quote by filling in the missing words and the author.</p>
+                <h3 class="help-section-title">How It Works</h3>
                 <ul>
-                    <li><span class="highlight">Click on missing words</span> to start filling them in</li>
-                    <li><span class="highlight">Click letters</span> or <span class="highlight">type on keyboard</span>
-                        to spell the word using the available letters</li>
-                    <li>Use <span class="highlight">Backspace</span> to remove letters and <span
-                            class="highlight">Reset</span> to clear your progress</li>
-                    <li>Don't forget to <span class="highlight">complete the author's name</span> at the bottom</li>
+                    <li>Use the letters to build each missing word.</li>
+                    <li>Finish all words, then solve the author to complete the puzzle.</li>
                 </ul>
-                <p>Come back daily for a new challenging quote to complete!</p>
-                <p><span class="highlight"><span class="ink-drop-icon">💧</span> Use ink drops to play past
-                        challenges</span> and <span class="highlight">complete achievements for extra ink drops!</span>
-                </p>
+                <h3 class="help-section-title">Wordle-Style Hints</h3>
+                <div class="wordle-legend">
+                    <div class="legend-item"><span class="legend-swatch correct"></span> Green: correct letter, correct spot</div>
+                    <div class="legend-item"><span class="legend-swatch present"></span> Yellow: letter exists, wrong spot</div>
+                    <div class="legend-item"><span class="legend-swatch absent"></span> Gray: letter not in the target</div>
+                </div>
+                <p>Hint colors appear after a full word attempt.</p>
+                <p><span class="highlight">Ink drops</span> unlock hints and past challenges.</p>
             </div>
         </div>
     </div>
@@ -4154,19 +4360,20 @@
                 <button class="close-modal" id="closeHelp">&times;</button>
             </div>
             <div class="help-content">
-                <p>Complete the missing words in the daily quote to reveal the inspirational message!</p>
+                <p>Solve the quote by filling in the missing words and the author.</p>
+                <h3 class="help-section-title">How It Works</h3>
                 <ul>
-                    <li><span class="highlight">Click on missing words</span> to start filling them in</li>
-                    <li><span class="highlight">Click letters</span> or <span class="highlight">type on keyboard</span>
-                        to spell the word using the available letters</li>
-                    <li>Use <span class="highlight">Backspace</span> to remove letters and <span
-                            class="highlight">Reset</span> to clear your progress</li>
-                    <li>Don't forget to <span class="highlight">complete the author's name</span> at the bottom</li>
+                    <li>Use the letters to build each missing word.</li>
+                    <li>Finish all words, then solve the author to complete the puzzle.</li>
                 </ul>
-                <p>Come back daily for a new challenging quote to complete!</p>
-                <p><span class="highlight"><span class="ink-drop-icon">💧</span> Use ink drops to play past
-                        challenges</span> and <span class="highlight">complete achievements for extra ink drops!</span>
-                </p>
+                <h3 class="help-section-title">Wordle-Style Hints</h3>
+                <div class="wordle-legend">
+                    <div class="legend-item"><span class="legend-swatch correct"></span> Green: correct letter, correct spot</div>
+                    <div class="legend-item"><span class="legend-swatch present"></span> Yellow: letter exists, wrong spot</div>
+                    <div class="legend-item"><span class="legend-swatch absent"></span> Gray: letter not in the target</div>
+                </div>
+                <p>Hint colors appear after a full word attempt.</p>
+                <p><span class="highlight">Ink drops</span> unlock hints and past challenges.</p>
             </div>
         </div>
     </div>
@@ -4268,6 +4475,9 @@
     </div>
 
     <!-- Music Selection Modal - Hidden -->
+    
+                <!-- Notification container for achievements -->
+                <div id="achievementNotificationContainer" class="achievement-notification-container"></div>
     <div class="modal" id="musicSelectionModal" style="display: none !important;">
         <div class="modal-content">
             <div class="modal-header">
