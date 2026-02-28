@@ -5,16 +5,13 @@
   "main": "index.html",
   "scripts": {
     "start": "npx http-server . -p 8080",
-    "dev": "npx http-server . -p 8080 -o",
-    "deploy": "vercel --prod"
+    "dev": "npx http-server . -p 8080 -o"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/jppalli/quotle.git"
   },
-  "dependencies": {
-    "@arkadiuminc/sdk": "^2"
-  },
+  "dependencies": {},
   "devDependencies": {
     "http-server": "^14.1.1"
   },
@@ -23,8 +20,7 @@
     "puzzle",
     "quotes",
     "word-game",
-    "daily-puzzle",
-    "arkadium"
+    "daily-puzzle"
   ],
   "author": "jppalli",
   "license": "MIT",

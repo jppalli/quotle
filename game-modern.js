@@ -1736,8 +1736,8 @@ class DailyQuotePuzzle {
 
         this.userInput = '';
         this.letterFeedback = []; // Initialize letter feedback for new word
-        // For authors, keep all letters together without spaces and track word structure
-        this.availableLetters = this.currentQuote.scrambledAuthor.replace(/\s/g, '').split('');
+        // For authors, keep all letters together without spaces, filter out dots (initials like C.S.)
+        this.availableLetters = this.currentQuote.scrambledAuthor.replace(/\s/g, '').split('').filter(ch => ch !== '.');
         this.authorWordStructure = this.currentQuote.author.split(' ').map(word => word.length);
         this.usedLetters = [];
 
@@ -1783,18 +1783,32 @@ class DailyQuotePuzzle {
                 wordContainer.style.gap = '12px';
                 wordContainer.style.alignItems = 'center';
 
+                const authorWords = this.currentQuote.author.split(' ');
+
                 // Add cells for this word
                 for (let i = 0; i < wordLength; i++) {
                     const cell = document.createElement('div');
                     cell.className = 'letter-cell';
                     
+                    const targetLetter = authorWords[wordIndex][i];
+
+                    // If this character is a dot, show it as pre-filled and locked
+                    if (targetLetter === '.') {
+                        cell.textContent = '.';
+                        cell.style.color = '#666';
+                        cell.style.backgroundColor = '#e8e8e8';
+                        cell.style.fontWeight = 'bold';
+                        cell.classList.add('locked-cell');
+                        cell.style.pointerEvents = 'none';
+                        wordContainer.appendChild(cell);
+                        // Do NOT increment userInputIndex — dots are not user input
+                        continue;
+                    }
+
                     // Check if user has typed a letter here
                     const userLetter = this.userInput[userInputIndex] || '';
                     
                     // Check if this position should show a ghost letter (revealed but not typed)
-                    // For author, we need to map back to the original author text
-                    const authorWords = this.currentQuote.author.split(' ');
-                    const targetLetter = authorWords[wordIndex][i];
                     const revealedLetters = this.getRevealedLetters();
                     
                     // Also check if this letter was correctly guessed in the author
@@ -1940,8 +1954,8 @@ class DailyQuotePuzzle {
 
         // Add letters from author if it exists
         if (this.currentQuote.scrambledAuthor) {
-            // For author, we need to remove spaces and add all letters
-            this.currentQuote.scrambledAuthor.replace(/\s/g, '').split('').forEach(letter => {
+            // For author, remove spaces and dots (dots are pre-filled, not playable)
+            this.currentQuote.scrambledAuthor.replace(/[\s.]/g, '').split('').forEach(letter => {
                 const lowerLetter = letter.toLowerCase();
                 allLetterCounts[lowerLetter] = (allLetterCounts[lowerLetter] || 0) + 1;
             });
@@ -2092,8 +2106,9 @@ class DailyQuotePuzzle {
         if (this.isUnscrambling) return;
 
         // Check if word is complete (either correct or incorrect)
+        // For authors, exclude dots from the target length since they're pre-filled
         const targetLength = this.activeWord.isAuthor ?
-            this.activeWord.original.replace(/\s/g, '').length :
+            this.activeWord.original.replace(/\s/g, '').replace(/\./g, '').length :
             (this.activeWord.originalWordOnly ? this.activeWord.originalWordOnly.length : this.activeWord.original.length);
 
         const isWordComplete = (this.wordValidationState === 'incorrect' || this.wordValidationState === 'correct') &&
@@ -2139,10 +2154,10 @@ class DailyQuotePuzzle {
         // Save current state after each letter click
         this.saveCurrentPuzzleState();
 
-        // For authors, check against length without spaces
+        // For authors, check against length without spaces and dots (dots are pre-filled)
         // For regular words, use word-only length (without punctuation)
         const targetLengthAfter = this.activeWord.isAuthor ?
-            this.activeWord.original.replace(/\s/g, '').length :
+            this.activeWord.original.replace(/\s/g, '').replace(/\./g, '').length :
             (this.activeWord.originalWordOnly ? this.activeWord.originalWordOnly.length : this.activeWord.original.length);
 
         if (this.userInput.length === targetLengthAfter) {
@@ -2160,9 +2175,9 @@ class DailyQuotePuzzle {
     }
 
     validateWordleStyle() {
-        // Get the target word (lowercase, without spaces for authors)
+        // Get the target word (lowercase, without spaces and dots for authors)
         const targetWord = this.activeWord.isAuthor ?
-            this.activeWord.original.toLowerCase().replace(/\s/g, '') :
+            this.activeWord.original.toLowerCase().replace(/\s/g, '').replace(/\./g, '') :
             (this.activeWord.originalWordOnly ? this.activeWord.originalWordOnly.toLowerCase() : this.activeWord.original.toLowerCase());
 
         const inputWord = this.userInput.toLowerCase();
@@ -2497,8 +2512,8 @@ class DailyQuotePuzzle {
         this.userInput = '';
         this.letterFeedback = []; // Initialize letter feedback for new word
 
-        // For authors, keep all letters together without spaces and track word structure
-        this.availableLetters = this.currentQuote.scrambledAuthor.replace(/\s/g, '').split('');
+        // For authors, keep all letters together without spaces, filter out dots (initials like C.S.)
+        this.availableLetters = this.currentQuote.scrambledAuthor.replace(/\s/g, '').split('').filter(ch => ch !== '.');
         this.authorWordStructure = this.currentQuote.author.split(' ').map(word => word.length);
         this.usedLetters = [];
 
@@ -2521,8 +2536,9 @@ class DailyQuotePuzzle {
         if (!this.activeWord || this.isUnscrambling) return;
 
         // Check if word is complete (either correct or incorrect)
+        // For authors, exclude dots from target length since they're pre-filled
         const targetLength = this.activeWord.isAuthor ?
-            this.activeWord.original.replace(/\s/g, '').length :
+            this.activeWord.original.replace(/\s/g, '').replace(/\./g, '').length :
             (this.activeWord.originalWordOnly ? this.activeWord.originalWordOnly.length : this.activeWord.original.length);
 
         const isWordComplete = (this.wordValidationState === 'incorrect' || this.wordValidationState === 'correct') &&
@@ -2961,10 +2977,10 @@ class DailyQuotePuzzle {
         this.hintsUsedThisPuzzle++;
 
         const targetWord = this.activeWord.isAuthor ?
-            this.activeWord.original.replace(/\s/g, '') :
+            this.activeWord.original.replace(/\s/g, '').replace(/\./g, '') :
             this.activeWord.original;
         const scrambledLetters = this.activeWord.isAuthor ?
-            this.activeWord.scrambled.replace(/\s/g, '').split('') :
+            this.activeWord.scrambled.replace(/\s/g, '').split('').filter(ch => ch !== '.') :
             this.activeWord.scrambled.split('');
 
         this.userInput = '';
@@ -2979,7 +2995,7 @@ class DailyQuotePuzzle {
                 // Word is complete, check if it's correct
                 const inputWord = this.userInput.toLowerCase();
                 const targetWordLower = this.activeWord.isAuthor ?
-                    this.activeWord.original.toLowerCase().replace(/\s/g, '') :
+                    this.activeWord.original.toLowerCase().replace(/\s/g, '').replace(/\./g, '') :
                     this.activeWord.original.toLowerCase();
 
                 if (inputWord === targetWordLower) {
@@ -3495,8 +3511,8 @@ class DailyQuotePuzzle {
 
         // Add letters from author if it exists
         if (this.currentQuote.scrambledAuthor) {
-            // For author, we need to remove spaces and add all letters
-            this.currentQuote.scrambledAuthor.replace(/\s/g, '').split('').forEach(letter => {
+            // For author, remove spaces and dots (dots are pre-filled, not playable)
+            this.currentQuote.scrambledAuthor.replace(/[\s.]/g, '').split('').forEach(letter => {
                 const lowerLetter = letter.toLowerCase();
                 allLetterCounts[lowerLetter] = (allLetterCounts[lowerLetter] || 0) + 1;
             });

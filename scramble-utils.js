@@ -34,12 +34,25 @@ function scrambleWord(word) {
  */
 function scrambleAuthor(author) {
     if (!author) return author;
-    
+
     const words = author.split(' ');
-    const scrambledWords = words.map(word => scrambleWord(word));
-    
+    const scrambledWords = words.map(word => {
+        // Skip initials like "C.S.", "T.S.", "J.K.", "E.E." — keep them as-is
+        if (/^[A-Z]\.([A-Z]\.?)*$/.test(word)) {
+            return word;
+        }
+        // Skip very short words (1-2 letters) — not worth scrambling
+        const lettersOnly = word.replace(/[^a-zA-Z]/g, '');
+        if (lettersOnly.length <= 2) {
+            return word;
+        }
+        // Only scramble the letters, preserve dots/punctuation positions
+        return scrambleWord(lettersOnly);
+    });
+
     return scrambledWords.join(' ');
 }
+
 
 /**
  * Processes a quote to add scrambled words and author based on wordIndices
