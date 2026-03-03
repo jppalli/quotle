@@ -2523,6 +2523,15 @@
             transform: translateX(0);
         }
 
+        .achievement-notification.ink-drops-reward,
+        .achievement-notification.daily-login-bonus,
+        .achievement-notification.ink-drops-refill {
+            background: #ffffff;
+            color: #111111;
+            border: 2px solid #111111;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+        }
+
         /* little pop animation for the icon when notification appears */
         .achievement-notification.show .notif-icon {
             animation: pop 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
@@ -2557,27 +2566,35 @@
             opacity: 0.9;
         }
 
+        .achievement-notification.ink-drops-reward h4,
+        .achievement-notification.ink-drops-reward p,
+        .achievement-notification.daily-login-bonus h4,
+        .achievement-notification.daily-login-bonus p,
+        .achievement-notification.ink-drops-refill h4,
+        .achievement-notification.ink-drops-refill p {
+            color: #111111;
+            opacity: 1;
+        }
+
         .achievement-notification h4 {
             margin: 0 0 5px 0;
             font-size: 16px;
             font-weight: 600;
         }
 
-        /* Make ink drops icon grey in notifications */
         .achievement-notification.ink-drops-refill h4 {
-            filter: grayscale(1) brightness(0.8);
+            filter: none;
         }
 
         .achievement-notification .daily-drop-icon {
             color: #111;
             filter: none;
-            background: #f2f2f2;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
+        }
+
+        .achievement-notification.ink-drops-reward .notif-icon,
+        .achievement-notification.daily-login-bonus .notif-icon,
+        .achievement-notification.ink-drops-refill .notif-icon {
+            color: #111111;
         }
 
 

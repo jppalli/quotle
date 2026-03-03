@@ -1059,7 +1059,7 @@ class DailyQuotePuzzle {
         notificationElement.className = 'achievement-notification ink-drops-reward';
 
         notificationElement.innerHTML = `
-            <div class="notif-icon"><span class="ink-drop-icon">💧</span></div>
+            <div class="notif-icon"><i class="fas fa-tint"></i></div>
             <div class="notif-text">
                 <h4>✓ Ink Drops Added!</h4>
                 <p>+${totalReward} ink drops from achievements</p>
@@ -3135,11 +3135,14 @@ class DailyQuotePuzzle {
     }
 
     getAvailableLettersForReveal() {
-        // Get letters only from scrambled words and author (same as typing section)
+        // Get letters only from unsolved words/author.
         const allLetters = new Set();
-        
-        // Add letters from all regular words (solved and unsolved)
+
+        // Add letters from unsolved regular words only.
         this.currentQuote.scrambledWords.forEach(word => {
+            if (this.solvedWords.has(this.getWordSolveKey(word))) {
+                return;
+            }
             word.scrambled.split('').forEach(letter => {
                 const lowerLetter = letter.toLowerCase();
                 if (lowerLetter >= 'a' && lowerLetter <= 'z') {
@@ -3148,9 +3151,9 @@ class DailyQuotePuzzle {
             });
         });
 
-        // Add letters from author if it exists
-        if (this.currentQuote.scrambledAuthor) {
-            // For author, we need to remove spaces and add all letters
+        // Add letters from author only if author is not solved.
+        if (!this.authorSolved && this.currentQuote.scrambledAuthor) {
+            // Remove spaces and dots from author initials.
             this.currentQuote.scrambledAuthor.replace(/\s/g, '').split('').forEach(letter => {
                 const lowerLetter = letter.toLowerCase();
                 if (lowerLetter >= 'a' && lowerLetter <= 'z') {
@@ -3167,22 +3170,31 @@ class DailyQuotePuzzle {
     }
 
     getLetterCountsForReveal() {
-        // Use the same logic as the typing section - count letters from scrambled words and author
+        // Count letters from unsolved words/author only.
         const letterCounts = {};
 
-        // Add letters from all regular words (solved and unsolved)
+        // Add letters from unsolved regular words only.
         this.currentQuote.scrambledWords.forEach(word => {
+            if (this.solvedWords.has(this.getWordSolveKey(word))) {
+                return;
+            }
             word.scrambled.split('').forEach(letter => {
                 const lowerLetter = letter.toLowerCase();
+                if (lowerLetter < 'a' || lowerLetter > 'z') {
+                    return;
+                }
                 letterCounts[lowerLetter] = (letterCounts[lowerLetter] || 0) + 1;
             });
         });
 
-        // Add letters from author if it exists
-        if (this.currentQuote.scrambledAuthor) {
-            // For author, we need to remove spaces and add all letters
+        // Add letters from author only if author is not solved.
+        if (!this.authorSolved && this.currentQuote.scrambledAuthor) {
+            // Remove spaces and dots from author initials.
             this.currentQuote.scrambledAuthor.replace(/\s/g, '').split('').forEach(letter => {
                 const lowerLetter = letter.toLowerCase();
+                if (lowerLetter < 'a' || lowerLetter > 'z') {
+                    return;
+                }
                 letterCounts[lowerLetter] = (letterCounts[lowerLetter] || 0) + 1;
             });
         }
@@ -6457,7 +6469,7 @@ Check console for detailed logs.`;
         const notification = document.createElement('div');
         notification.className = 'achievement-notification ink-drops-refill show';
         notification.innerHTML = `
-            <div class="notif-icon"><span class="ink-drop-icon">💧</span></div>
+            <div class="notif-icon"><i class="fas fa-tint"></i></div>
             <div class="notif-text">
                 <h4>+1 Ink Drop!</h4>
                 <p>Next ad in 30 minutes</p>
@@ -6785,7 +6797,7 @@ Check console for detailed logs.`;
         const notification = document.createElement('div');
         notification.className = 'achievement-notification ink-drops-refill show';
         notification.innerHTML = `
-            <div class="notif-icon">💧</div>
+            <div class="notif-icon"><i class="fas fa-tint"></i></div>
             <div class="notif-text">
                 <h4>Ink Drops Refilled!</h4>
                 <p>You received 3 ink drops</p>
