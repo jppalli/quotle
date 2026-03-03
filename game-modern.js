@@ -28,6 +28,7 @@ class DailyQuotePuzzle {
         // Settings
         this.soundEffectsEnabled = true;
         this.backgroundMusicEnabled = true;
+        this.autoResetOnIncorrect = true;
 
         // Unscramble cooldown system
         this.unscrambleCooldown = 60000; // 60 seconds in milliseconds
@@ -39,6 +40,10 @@ class DailyQuotePuzzle {
         this.incorrectAutoResetTimeout = null;
         this.incorrectFeedbackLockMs = 800;
         this.incorrectAutoResetDelayMs = 1500;
+        this.wordValidationCache = new Map();
+        this.pendingWordValidationRequests = new Map();
+        this.menuHeaderTapCount = 0;
+        this.menuHeaderTapResetTimeout = null;
 
         // Achievements system
         this.achievementsManager = new AchievementsManager();
@@ -129,8 +134,6 @@ class DailyQuotePuzzle {
             letterCellsWrap: document.getElementById('letterCellsWrap'),
             letterCells: document.getElementById('letterCells'),
             availableLetters: document.getElementById('availableLetters'),
-            quickResetRow: document.getElementById('quickResetRow'),
-            quickResetWordBtn: document.getElementById('quickResetWordBtn'),
             resetBtn: document.getElementById('resetBtn'),
             backspaceBtn: document.getElementById('backspaceBtn'),
             unscrambleBtn: document.getElementById('unscrambleBtn'),
@@ -174,6 +177,7 @@ class DailyQuotePuzzle {
             settingsIcon: document.getElementById('settingsIcon'),
             soundEffectsToggle: document.getElementById('soundEffectsToggle'),
             backgroundMusicToggle: document.getElementById('backgroundMusicToggle'),
+            autoResetToggle: document.getElementById('autoResetToggle'),
             changeSongBtn: document.getElementById('changeSongBtn'),
             musicSelectionModal: document.getElementById('musicSelectionModal'),
             closeMusicSelection: document.getElementById('closeMusicSelection'),
@@ -649,7 +653,8 @@ class DailyQuotePuzzle {
     saveSettings() {
         const settings = {
             soundEffectsEnabled: this.soundEffectsEnabled,
-            backgroundMusicEnabled: this.backgroundMusicEnabled
+            backgroundMusicEnabled: this.backgroundMusicEnabled,
+            autoResetOnIncorrect: this.autoResetOnIncorrect
         };
         localStorage.setItem('dailyQuotePuzzleSettings', JSON.stringify(settings));
     }
@@ -661,6 +666,7 @@ class DailyQuotePuzzle {
                 const settings = JSON.parse(savedSettings);
                 this.soundEffectsEnabled = settings.soundEffectsEnabled !== undefined ? settings.soundEffectsEnabled : true;
                 this.backgroundMusicEnabled = settings.backgroundMusicEnabled !== undefined ? settings.backgroundMusicEnabled : true;
+                this.autoResetOnIncorrect = settings.autoResetOnIncorrect !== undefined ? settings.autoResetOnIncorrect : true;
             }
         } catch (error) {
             console.log('Could not load settings:', error);
@@ -680,6 +686,9 @@ class DailyQuotePuzzle {
         }
         if (this.elements.menuBackgroundMusicToggle) {
             this.elements.menuBackgroundMusicToggle.checked = this.backgroundMusicEnabled;
+        }
+        if (this.elements.autoResetToggle) {
+            this.elements.autoResetToggle.checked = this.autoResetOnIncorrect;
         }
         // Don't auto-start background music due to browser autoplay restrictions
         // this.toggleBackgroundMusic();
@@ -751,6 +760,8 @@ class DailyQuotePuzzle {
                 authorSolved: this.authorSolved,
                 gameComplete: this.gameComplete,
                 activeWord: this.activeWord ? this.activeWord.original : null,
+                activeWordIndex: this.activeWord && !this.activeWord.isAuthor ? this.activeWord.index : null,
+                activeWordIsAuthor: !!(this.activeWord && this.activeWord.isAuthor),
                 userInput: this.userInput,
                 hintsUsed: this.hintsUsedThisPuzzle,
                 unscrambleLastUsed: this.unscrambleLastUsed,
@@ -1527,6 +1538,61 @@ class DailyQuotePuzzle {
         return lowerWord;
     }
 
+    getWordSolveKey(wordData) {
+        if (!wordData || wordData.isAuthor) {
+            return '__author__';
+        }
+
+        if (typeof wordData.index === 'number') {
+            return `word_${wordData.index}`;
+        }
+
+        return `legacy_${(wordData.original || '').toLowerCase()}`;
+    }
+
+    getWordCorrectLettersKey(wordData) {
+        if (!wordData || wordData.isAuthor) {
+            return 'author';
+        }
+
+        if (typeof wordData.index === 'number') {
+            return `word_${wordData.index}`;
+        }
+
+        return (wordData.original || '').toLowerCase();
+    }
+
+    normalizeSolvedWordsSet(savedSolvedWords) {
+        const normalized = new Set();
+        if (!Array.isArray(savedSolvedWords)) {
+            return normalized;
+        }
+
+        const quoteWords = this.currentQuote && Array.isArray(this.currentQuote.scrambledWords)
+            ? this.currentQuote.scrambledWords
+            : [];
+
+        savedSolvedWords.forEach(entry => {
+            if (typeof entry !== 'string') {
+                return;
+            }
+
+            if (entry.startsWith('word_')) {
+                normalized.add(entry);
+                return;
+            }
+
+            const legacyWord = entry.toLowerCase();
+            quoteWords.forEach(sw => {
+                if ((sw.original || '').toLowerCase() === legacyWord) {
+                    normalized.add(this.getWordSolveKey(sw));
+                }
+            });
+        });
+
+        return normalized;
+    }
+
     refreshLetterPool() {
         // Only refresh if we haven't initialized the pool yet or if there's no pool
         if (this.globalLetterPool) {
@@ -1581,10 +1647,10 @@ class DailyQuotePuzzle {
             // Normal game logic for active puzzles
             words.forEach((word, index) => {
                 const scrambledWord = this.currentQuote.scrambledWords.find(sw => sw.index === index);
-                const isSolved = scrambledWord && this.solvedWords.has(scrambledWord.original);
+                const isSolved = scrambledWord && this.solvedWords.has(this.getWordSolveKey(scrambledWord));
 
                 if (scrambledWord && !isSolved) {
-                    const isActive = this.activeWord && this.activeWord.original === scrambledWord.original;
+                    const isActive = this.activeWord && !this.activeWord.isAuthor && this.activeWord.index === scrambledWord.index;
 
                     // For unsolved words, show asterisks instead of scrambled letters
                     // But show correctly guessed letters if we have them
@@ -1721,7 +1787,7 @@ class DailyQuotePuzzle {
     }
 
     handleWordClick(wordData, isUserClick = true, resetInput = true) {
-        if (this.solvedWords.has(wordData.original) || this.isUnscrambling) return;
+        if (this.solvedWords.has(this.getWordSolveKey(wordData)) || this.isUnscrambling) return;
 
         // Debug logging
         console.log('🔊 handleWordClick called, isUserClick:', isUserClick, 'resetInput:', resetInput);
@@ -1811,13 +1877,18 @@ class DailyQuotePuzzle {
     }
 
     renderInputArea() {
+        this.recalculateGlobalLetterPool();
+
         if (!this.activeWord) {
             if (this.solvedWords.size === this.currentQuote.scrambledWords.length && this.authorSolved) {
                 this.elements.inputArea.classList.remove('show');
+                if (this.elements.availableLetters) {
+                    this.elements.availableLetters.innerHTML = '';
+                }
                 return;
             }
 
-            const firstWord = this.currentQuote.scrambledWords.find(word => !this.solvedWords.has(word.original));
+            const firstWord = this.currentQuote.scrambledWords.find(word => !this.solvedWords.has(this.getWordSolveKey(word)));
             if (firstWord) {
                 setTimeout(() => this.handleWordClick(firstWord, false, false), 100);
             } else if (!this.authorSolved) {
@@ -1832,180 +1903,202 @@ class DailyQuotePuzzle {
 
         // Use the word-only length (without punctuation) for input cells
         const targetLength = this.activeWord.originalWordOnly ? this.activeWord.originalWordOnly.length : this.activeWord.original.length;
-        if (this.elements.letterCells) {
-            this.elements.letterCells.innerHTML = '';
+
+        // Determine if we need a full rebuild or can update in-place
+        const currentWordKey = (this.activeWord.isAuthor ? '__author__' : this.getWordSolveKey(this.activeWord)) + '_' + targetLength;
+        const needsCellRebuild = this._lastRenderedWordKey !== currentWordKey;
+
+        if (needsCellRebuild) {
+            this._lastRenderedWordKey = currentWordKey;
+            if (this.elements.letterCells) {
+                this.elements.letterCells.innerHTML = '';
+            }
         }
 
         if (this.activeWord.isAuthor && this.authorWordStructure) {
-            // For authors, create word containers that keep letters together
-            let userInputIndex = 0;
+            if (needsCellRebuild) {
+                // Full rebuild for author word containers
+                let userInputIndex = 0;
 
-            this.authorWordStructure.forEach((wordLength, wordIndex) => {
-                // Create a container for this word
-                const wordContainer = document.createElement('div');
-                wordContainer.className = 'author-word-container';
-                wordContainer.style.display = 'flex';
-                wordContainer.style.flexWrap = 'nowrap';
-                wordContainer.style.gap = '12px';
-                wordContainer.style.alignItems = 'center';
+                this.authorWordStructure.forEach((wordLength, wordIndex) => {
+                    const wordContainer = document.createElement('div');
+                    wordContainer.className = 'author-word-container';
+                    wordContainer.style.display = 'flex';
+                    wordContainer.style.flexWrap = 'nowrap';
+                    wordContainer.style.gap = '12px';
+                    wordContainer.style.alignItems = 'center';
 
-                const authorWords = this.currentQuote.author.split(' ');
+                    const authorWords = this.currentQuote.author.split(' ');
 
-                // Add cells for this word
-                for (let i = 0; i < wordLength; i++) {
-                    const cell = document.createElement('div');
-                    cell.className = 'letter-cell';
-                    
-                    const targetLetter = authorWords[wordIndex][i];
+                    for (let i = 0; i < wordLength; i++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'letter-cell';
+                        const targetLetter = authorWords[wordIndex][i];
 
-                    // If this character is a dot, show it as pre-filled and locked
-                    if (targetLetter === '.') {
-                        cell.textContent = '.';
-                        cell.style.color = '#666';
-                        cell.style.backgroundColor = '#e8e8e8';
-                        cell.style.fontWeight = 'bold';
-                        cell.classList.add('locked-cell');
-                        cell.style.pointerEvents = 'none';
-                        wordContainer.appendChild(cell);
-                        // Do NOT increment userInputIndex — dots are not user input
-                        continue;
-                    }
-
-                    // Check if user has typed a letter here
-                    const userLetter = this.userInput[userInputIndex] || '';
-                    
-                    // Check if this position should show a ghost letter (revealed but not typed)
-                    const revealedLetters = this.getRevealedLetters();
-                    
-                    // Also check if this letter was correctly guessed in the author
-                    const correctLetters = this.wordCorrectLetters ? this.wordCorrectLetters['author'] : [];
-                    const hasCorrectLetter = correctLetters && correctLetters.some(cl => cl.position === userInputIndex);
-                    
-                    const shouldShowGhost = !userLetter && targetLetter && (revealedLetters.has(targetLetter.toLowerCase()) || hasCorrectLetter);
-                    
-                    if (shouldShowGhost) {
-                        // Show ghost letter
-                        cell.textContent = targetLetter.toLowerCase();
-                        cell.style.color = '#ccc';
-                        cell.style.fontStyle = 'italic';
-                        cell.classList.add('ghost-letter');
-                    } else {
-                        // Show user input or empty
-                        cell.textContent = userLetter.toLowerCase();
-                        cell.style.color = '#000000';
-                        cell.style.fontStyle = 'normal';
-                        cell.classList.remove('ghost-letter');
-                    }
-
-                    // Apply Wordle-like feedback colors if available
-                    if (this.letterFeedback && this.letterFeedback[userInputIndex]) {
-                        const feedback = this.letterFeedback[userInputIndex];
-                        switch (feedback.status) {
-                            case 'correct': // Green
-                                cell.style.backgroundColor = '#538d4e';
-                                cell.style.color = 'white';
-                                break;
-                            case 'present': // Yellow
-                                cell.style.backgroundColor = '#b59f3b';
-                                cell.style.color = 'white';
-                                break;
-                            case 'absent': // Grey
-                                cell.style.backgroundColor = '#3a3a3c';
-                                cell.style.color = 'white';
-                                break;
-                            default:
-                                // Default styling for non-ghost letters
-                                if (!shouldShowGhost) {
-                                    cell.style.backgroundColor = '#ffffff';
-                                    cell.style.color = '#000000';
-                                }
+                        if (targetLetter === '.') {
+                            cell.textContent = '.';
+                            cell.style.color = '#666';
+                            cell.style.backgroundColor = '#e8e8e8';
+                            cell.style.fontWeight = 'bold';
+                            cell.classList.add('locked-cell');
+                            cell.style.pointerEvents = 'none';
+                            cell.dataset.dot = 'true';
+                            wordContainer.appendChild(cell);
+                            continue;
                         }
+
+                        cell.dataset.inputIdx = userInputIndex;
+                        wordContainer.appendChild(cell);
+                        userInputIndex++;
                     }
 
-                    wordContainer.appendChild(cell);
-                    userInputIndex++;
+                    if (wordIndex < this.authorWordStructure.length - 1) {
+                        const gapCell = document.createElement('div');
+                        gapCell.className = 'author-gap';
+                        gapCell.style.width = '30px';
+                        gapCell.style.height = '50px';
+                        gapCell.style.display = 'flex';
+                        gapCell.style.alignItems = 'center';
+                        gapCell.style.justifyContent = 'center';
+                        gapCell.innerHTML = '<div style="width: 2px; height: 20px; background: #ddd;"></div>';
+                        wordContainer.appendChild(gapCell);
+                    }
+
+                    this.elements.letterCells.appendChild(wordContainer);
+                });
+            }
+
+            // Update author cells in-place
+            const authorCells = this.elements.letterCells.querySelectorAll('.letter-cell:not(.locked-cell)');
+            const authorWords = this.currentQuote.author.split(' ');
+            const revealedLetters = this.getRevealedLetters();
+            const correctLetters = this.wordCorrectLetters ? this.wordCorrectLetters['author'] : [];
+
+            authorCells.forEach(cell => {
+                const idx = parseInt(cell.dataset.inputIdx);
+                const userLetter = this.userInput[idx] || '';
+
+                // Find the target letter by walking the author word structure
+                let targetLetter = '';
+                let pos = 0;
+                for (let w = 0; w < this.authorWordStructure.length; w++) {
+                    for (let c = 0; c < this.authorWordStructure[w]; c++) {
+                        if (authorWords[w][c] === '.') continue;
+                        if (pos === idx) { targetLetter = authorWords[w][c]; }
+                        pos++;
+                    }
                 }
 
-                // Add gap after each word except the last
-                if (wordIndex < this.authorWordStructure.length - 1) {
-                    const gapCell = document.createElement('div');
-                    gapCell.className = 'author-gap';
-                    gapCell.style.width = '30px';
-                    gapCell.style.height = '50px';
-                    gapCell.style.display = 'flex';
-                    gapCell.style.alignItems = 'center';
-                    gapCell.style.justifyContent = 'center';
-                    // Add visual indicator for word separation
-                    gapCell.innerHTML = '<div style="width: 2px; height: 20px; background: #ddd;"></div>';
-                    wordContainer.appendChild(gapCell);
-                }
-
-                this.elements.letterCells.appendChild(wordContainer);
-            });
-        } else {
-            // For regular words, create normal input boxes
-            for (let i = 0; i < targetLength; i++) {
-                const cell = document.createElement('div');
-                cell.className = 'letter-cell';
-                
-                // Check if user has typed a letter here
-                const userLetter = this.userInput[i] || '';
-                
-                // Check if this position should show a ghost letter (revealed but not typed)
-                const targetWord = this.activeWord.originalWordOnly || this.activeWord.original;
-                const targetLetter = targetWord[i];
-                const revealedLetters = this.getRevealedLetters();
-                
-                // Also check if this letter was correctly guessed in this word
-                const correctLetters = this.getCorrectLettersForWord(this.activeWord);
-                const hasCorrectLetter = correctLetters && correctLetters.some(cl => cl.position === i);
-                
+                const hasCorrectLetter = correctLetters && correctLetters.some(cl => cl.position === idx);
                 const shouldShowGhost = !userLetter && targetLetter && (revealedLetters.has(targetLetter.toLowerCase()) || hasCorrectLetter);
-                
+
                 if (shouldShowGhost) {
-                    // Show ghost letter
                     cell.textContent = targetLetter.toLowerCase();
                     cell.style.color = '#ccc';
                     cell.style.fontStyle = 'italic';
                     cell.classList.add('ghost-letter');
                 } else {
-                    // Show user input or empty
                     cell.textContent = userLetter.toLowerCase();
                     cell.style.color = '#000000';
                     cell.style.fontStyle = 'normal';
                     cell.classList.remove('ghost-letter');
                 }
 
-                // Apply Wordle-like feedback colors if available
-                if (this.letterFeedback && this.letterFeedback[i]) {
-                    const feedback = this.letterFeedback[i];
+                if (this.letterFeedback && this.letterFeedback[idx]) {
+                    const feedback = this.letterFeedback[idx];
                     switch (feedback.status) {
-                        case 'correct': // Green
+                        case 'correct':
                             cell.style.backgroundColor = '#538d4e';
                             cell.style.color = 'white';
                             break;
-                        case 'present': // Yellow
+                        case 'present':
                             cell.style.backgroundColor = '#b59f3b';
                             cell.style.color = 'white';
                             break;
-                        case 'absent': // Grey
+                        case 'absent':
                             cell.style.backgroundColor = '#3a3a3c';
                             cell.style.color = 'white';
                             break;
                         default:
-                            // Default styling for non-ghost letters
                             if (!shouldShowGhost) {
                                 cell.style.backgroundColor = '#ffffff';
                                 cell.style.color = '#000000';
                             }
                     }
+                } else {
+                    if (!shouldShowGhost) {
+                        cell.style.backgroundColor = '#ffffff';
+                        cell.style.color = '#000000';
+                    }
+                }
+            });
+        } else {
+            // For regular words
+            if (needsCellRebuild) {
+                for (let i = 0; i < targetLength; i++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'letter-cell';
+                    cell.dataset.inputIdx = i;
+                    this.elements.letterCells.appendChild(cell);
+                }
+            }
+
+            // Update cells in-place
+            const cells = this.elements.letterCells.querySelectorAll('.letter-cell');
+            const targetWord = this.activeWord.originalWordOnly || this.activeWord.original;
+            const revealedLetters = this.getRevealedLetters();
+            const correctLetters = this.getCorrectLettersForWord(this.activeWord);
+
+            for (let i = 0; i < targetLength; i++) {
+                const cell = cells[i];
+                if (!cell) continue;
+
+                const userLetter = this.userInput[i] || '';
+                const targetLetter = targetWord[i];
+                const hasCorrectLetter = correctLetters && correctLetters.some(cl => cl.position === i);
+                const shouldShowGhost = !userLetter && targetLetter && (revealedLetters.has(targetLetter.toLowerCase()) || hasCorrectLetter);
+
+                if (shouldShowGhost) {
+                    cell.textContent = targetLetter.toLowerCase();
+                    cell.style.color = '#ccc';
+                    cell.style.fontStyle = 'italic';
+                    cell.classList.add('ghost-letter');
+                } else {
+                    cell.textContent = userLetter.toLowerCase();
+                    cell.style.color = '#000000';
+                    cell.style.fontStyle = 'normal';
+                    cell.classList.remove('ghost-letter');
                 }
 
-                this.elements.letterCells.appendChild(cell);
+                if (this.letterFeedback && this.letterFeedback[i]) {
+                    const feedback = this.letterFeedback[i];
+                    switch (feedback.status) {
+                        case 'correct':
+                            cell.style.backgroundColor = '#538d4e';
+                            cell.style.color = 'white';
+                            break;
+                        case 'present':
+                            cell.style.backgroundColor = '#b59f3b';
+                            cell.style.color = 'white';
+                            break;
+                        case 'absent':
+                            cell.style.backgroundColor = '#3a3a3c';
+                            cell.style.color = 'white';
+                            break;
+                        default:
+                            if (!shouldShowGhost) {
+                                cell.style.backgroundColor = '#ffffff';
+                                cell.style.color = '#000000';
+                            }
+                    }
+                } else {
+                    if (!shouldShowGhost) {
+                        cell.style.backgroundColor = '#ffffff';
+                        cell.style.color = '#000000';
+                    }
+                }
             }
         }
-
-        this.elements.availableLetters.innerHTML = '';
 
         // Collect all letters from the entire puzzle (both solved and unsolved words)
         const allLetterCounts = {};
@@ -2032,53 +2125,80 @@ class DailyQuotePuzzle {
             this.globalLetterPool = { ...allLetterCounts };
         }
 
-        // Create buttons for unique letters with counts, maintaining consistent order
-        // Sort letters alphabetically to prevent "rescrambling" effect
-        Object.keys(allLetterCounts).sort().forEach(letter => {
-            const btn = document.createElement('div');
-            btn.className = 'letter-btn';
-            btn.textContent = letter;
-            btn.dataset.letter = letter;
+        // Update available letter buttons in-place to avoid flicker
+        // Only do a full rebuild if the letter set has changed
+        const sortedLetters = Object.keys(allLetterCounts).sort();
+        const existingBtns = this.elements.availableLetters.querySelectorAll('.letter-btn');
+        const existingLetters = Array.from(existingBtns).map(b => b.dataset.letter);
+        const needsRebuild = sortedLetters.length !== existingLetters.length || 
+            sortedLetters.some((l, i) => l !== existingLetters[i]);
 
-            // Use the actual available count from global pool
+        if (needsRebuild) {
+            this.elements.availableLetters.innerHTML = '';
+        }
+
+        sortedLetters.forEach((letter, idx) => {
             const availableCount = this.globalLetterPool[letter] || 0;
+            let btn;
 
-            // Add count indicator similar to achievement notifications
-            if (availableCount > 1) {
-                const countIndicator = document.createElement('div');
-                countIndicator.className = 'notification-dot';
-                countIndicator.textContent = availableCount;
-                countIndicator.style.position = 'absolute';
-                countIndicator.style.top = '-8px';
-                countIndicator.style.right = '-8px';
-                countIndicator.style.background = '#000000';
-                countIndicator.style.color = 'white';
-                countIndicator.style.borderRadius = '50%';
-                countIndicator.style.width = '20px';
-                countIndicator.style.height = '20px';
-                countIndicator.style.display = 'flex';
-                countIndicator.style.alignItems = 'center';
-                countIndicator.style.justifyContent = 'center';
-                countIndicator.style.fontSize = '12px';
-                countIndicator.style.fontWeight = 'bold';
+            if (needsRebuild) {
+                btn = document.createElement('div');
+                btn.className = 'letter-btn';
+                btn.textContent = letter;
+                btn.dataset.letter = letter;
                 btn.style.position = 'relative';
-                btn.appendChild(countIndicator);
+                this.addMobileTouchHandling(btn, () => {
+                    this.handleGlobalLetterClick(letter);
+                });
+                this.elements.availableLetters.appendChild(btn);
+            } else {
+                btn = existingBtns[idx];
+            }
+
+            // Update count indicator
+            const existingDot = btn.querySelector('.notification-dot');
+            if (availableCount > 1) {
+                btn.style.opacity = '';
+                btn.style.backgroundColor = '';
+                btn.style.color = '';
+                btn.style.pointerEvents = '';
+                btn.style.cursor = '';
+                if (existingDot) {
+                    existingDot.textContent = availableCount;
+                } else {
+                    const countIndicator = document.createElement('div');
+                    countIndicator.className = 'notification-dot';
+                    countIndicator.textContent = availableCount;
+                    countIndicator.style.position = 'absolute';
+                    countIndicator.style.top = '-8px';
+                    countIndicator.style.right = '-8px';
+                    countIndicator.style.background = '#000000';
+                    countIndicator.style.color = 'white';
+                    countIndicator.style.borderRadius = '50%';
+                    countIndicator.style.width = '20px';
+                    countIndicator.style.height = '20px';
+                    countIndicator.style.display = 'flex';
+                    countIndicator.style.alignItems = 'center';
+                    countIndicator.style.justifyContent = 'center';
+                    countIndicator.style.fontSize = '12px';
+                    countIndicator.style.fontWeight = 'bold';
+                    btn.appendChild(countIndicator);
+                }
             } else if (availableCount === 0) {
-                // If no letters available, grey out the button
+                if (existingDot) existingDot.remove();
                 btn.style.opacity = '1';
                 btn.style.backgroundColor = '#e0e0e0';
                 btn.style.color = '#999';
                 btn.style.pointerEvents = 'none';
                 btn.style.cursor = 'not-allowed';
+            } else {
+                if (existingDot) existingDot.remove();
+                btn.style.opacity = '';
+                btn.style.backgroundColor = '';
+                btn.style.color = '';
+                btn.style.pointerEvents = '';
+                btn.style.cursor = '';
             }
-
-            // Allow player to use any letter on any word (don't disable letters)
-            // Enhanced mobile touch handling for all letters
-            this.addMobileTouchHandling(btn, () => {
-                this.handleGlobalLetterClick(letter);
-            });
-
-            this.elements.availableLetters.appendChild(btn);
         });
 
         // Update definition button state
@@ -2103,6 +2223,7 @@ class DailyQuotePuzzle {
         let touchStartY = 0;
         let touchStartX = 0;
         let isTouchMoved = false;
+        let lastTouchHandledAt = 0;
 
         // Handle both click and touch events for better mobile responsiveness
         const handleInteraction = (event) => {
@@ -2152,16 +2273,16 @@ class DailyQuotePuzzle {
 
             // Only trigger if touch was short and didn't move much
             if (touchDuration < 300 && !isTouchMoved) {
+                lastTouchHandledAt = touchEndTime;
                 handleInteraction(event);
             }
         });
 
         // Mouse click handling for desktop
         element.addEventListener('click', (event) => {
-            // Only handle mouse clicks if not on a touch device
-            if (!('ontouchstart' in window)) {
-                handleInteraction(event);
-            }
+            // Ignore synthetic click immediately after touchend
+            if (Date.now() - lastTouchHandledAt < 500) return;
+            handleInteraction(event);
         });
 
         // Prevent context menu on long press
@@ -2251,7 +2372,7 @@ class DailyQuotePuzzle {
         if (!this.wordCorrectLetters || !scrambledWord.original) {
             return [];
         }
-        return this.wordCorrectLetters[scrambledWord.original] || [];
+        return this.wordCorrectLetters[this.getWordCorrectLettersKey(scrambledWord)] || [];
     }
 
     getActiveTargetLength() {
@@ -2264,34 +2385,21 @@ class DailyQuotePuzzle {
     }
 
     updateQuickResetVisibility() {
-        if (!this.elements.quickResetRow) return;
-        const isIncorrectComplete = this.wordValidationState === 'incorrect' && this.userInput.length === this.getActiveTargetLength();
-        this.elements.quickResetRow.classList.toggle('show', isIncorrectComplete);
-        if (isIncorrectComplete) {
-            this.positionQuickResetButton();
-        } else {
-            this.elements.quickResetRow.classList.remove('below-right');
-        }
+        // Incorrect words auto-reset after a brief delay (see scheduleIncorrectAutoReset).
+        // No extra UI needed — the player just keeps typing.
+    }
+
+    shakeLetterCells() {
+        const wrap = this.elements.letterCellsWrap;
+        if (!wrap) return;
+        wrap.classList.add('shake-wrong');
+        wrap.addEventListener('animationend', () => {
+            wrap.classList.remove('shake-wrong');
+        }, { once: true });
     }
 
     positionQuickResetButton() {
-        const quickResetRow = this.elements.quickResetRow;
-        const quickResetBtn = this.elements.quickResetWordBtn;
-        const inputArea = this.elements.inputArea;
-        const letterCellsWrap = this.elements.letterCellsWrap;
-        if (!quickResetRow || !quickResetBtn || !inputArea || !letterCellsWrap) return;
-
-        quickResetRow.classList.remove('below-right');
-
-        const inputRect = inputArea.getBoundingClientRect();
-        const wrapRect = letterCellsWrap.getBoundingClientRect();
-        const btnRect = quickResetBtn.getBoundingClientRect();
-        const spaceRight = inputRect.right - wrapRect.right;
-        const minNeeded = btnRect.width + 12;
-
-        if (spaceRight < minNeeded) {
-            quickResetRow.classList.add('below-right');
-        }
+        // No-op: Try Again button removed
     }
 
     cancelIncorrectAutoReset() {
@@ -2312,13 +2420,34 @@ class DailyQuotePuzzle {
         }, this.incorrectAutoResetDelayMs);
     }
 
-    validateWordleStyle() {
+    async validateWordleStyle() {
         // Get the target word (lowercase, without spaces and dots for authors)
         const targetWord = this.activeWord.isAuthor ?
             this.activeWord.original.toLowerCase().replace(/\s/g, '').replace(/\./g, '') :
             (this.activeWord.originalWordOnly ? this.activeWord.originalWordOnly.toLowerCase() : this.activeWord.original.toLowerCase());
 
         const inputWord = this.userInput.toLowerCase();
+
+        // Only validate dictionary words for regular quote words that contain letters only.
+        // Skip author names and tokens with punctuation to avoid false negatives.
+        const shouldValidateDictionaryWord = !this.activeWord.isAuthor && /^[a-z]+$/.test(targetWord) && /^[a-z]+$/.test(inputWord);
+        if (shouldValidateDictionaryWord) {
+            const isRealWord = await this.isValidDictionaryWord(inputWord);
+            if (!isRealWord) {
+                this.wordValidationState = 'pending';
+                this.playErrorSound();
+                this.shakeLetterCells();
+                this.showWordValidationMessage('Not a word');
+                this.incorrectFeedbackLockUntil = Date.now() + this.incorrectFeedbackLockMs;
+                setTimeout(() => {
+                    const sameInputStillPresent = this.userInput.toLowerCase() === inputWord;
+                    if (sameInputStillPresent) {
+                        this.resetInput(true, false);
+                    }
+                }, 350);
+                return;
+            }
+        }
 
         // Reset feedback array
         this.letterFeedback = [];
@@ -2375,23 +2504,19 @@ class DailyQuotePuzzle {
             }
         }
 
-        // Store correct letters for this word
-        if (this.activeWord.original) {
+        // Check if the word is correct
+        const isCorrect = this.letterFeedback.every(feedback => feedback.status === 'correct');
+
+        // Only store correct letters when the word is fully correct
+        // (prevents ghost letters from appearing after wrong attempts)
+        if (isCorrect && this.activeWord.original) {
             if (!this.wordCorrectLetters) {
                 this.wordCorrectLetters = {};
             }
 
-            if (this.activeWord.isAuthor) {
-                // For author, store with a special key
-                this.wordCorrectLetters['author'] = correctLetters;
-            } else {
-                // For regular words, store with the word as key
-                this.wordCorrectLetters[this.activeWord.original] = correctLetters;
-            }
+            const wordKey = this.getWordCorrectLettersKey(this.activeWord);
+            this.wordCorrectLetters[wordKey] = correctLetters;
         }
-
-        // Check if the word is correct
-        const isCorrect = this.letterFeedback.every(feedback => feedback.status === 'correct');
 
         // Update the display with the feedback colors
         this.renderInputArea();
@@ -2410,7 +2535,7 @@ class DailyQuotePuzzle {
                     this.updateAuthorDisplay();
                     this.playAuthorCompleteSound();
                 } else {
-                    this.solvedWords.add(this.activeWord.original);
+                    this.solvedWords.add(this.getWordSolveKey(this.activeWord));
                     this.updateWordDisplay(this.activeWord);
                     this.playWordCompleteSound();
 
@@ -2430,12 +2555,69 @@ class DailyQuotePuzzle {
                 }, 1200);
             }, 500); // Short delay to show the colors before completing
         } else {
-            // Word is incorrect: keep feedback visible, show quick reset, then auto-reset if idle
+            // Word is incorrect: keep feedback visible, shake the cells, then auto-reset if enabled
             this.wordValidationState = 'incorrect';
             this.incorrectFeedbackLockUntil = Date.now() + this.incorrectFeedbackLockMs;
+            this.shakeLetterCells();
             this.updateQuickResetVisibility();
-            this.cancelIncorrectAutoReset();
+            if (this.autoResetOnIncorrect) {
+                this.scheduleIncorrectAutoReset();
+            }
         }
+    }
+
+    async isValidDictionaryWord(word) {
+        const normalizedWord = (word || '').toLowerCase().trim();
+        if (!/^[a-z]+$/.test(normalizedWord)) return false;
+
+        if (this.wordValidationCache.has(normalizedWord)) {
+            return this.wordValidationCache.get(normalizedWord);
+        }
+
+        if (this.pendingWordValidationRequests.has(normalizedWord)) {
+            return this.pendingWordValidationRequests.get(normalizedWord);
+        }
+
+        const validationRequest = (async () => {
+            try {
+                const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${normalizedWord}`);
+                const isValid = response.ok;
+                this.wordValidationCache.set(normalizedWord, isValid);
+                return isValid;
+            } catch (error) {
+                console.warn(`Dictionary validation unavailable for "${normalizedWord}", allowing guess.`, error);
+                // Don't block gameplay if dictionary API is unavailable.
+                return true;
+            } finally {
+                this.pendingWordValidationRequests.delete(normalizedWord);
+            }
+        })();
+
+        this.pendingWordValidationRequests.set(normalizedWord, validationRequest);
+        return validationRequest;
+    }
+
+    showWordValidationMessage(message) {
+        const existing = document.querySelector('.word-validation-message');
+        if (existing) {
+            existing.remove();
+        }
+
+        const notification = document.createElement('div');
+        notification.className = 'word-validation-message show';
+        notification.textContent = message;
+
+        const targetContainer = this.elements.letterInputRow || this.elements.inputArea || document.body;
+        targetContainer.appendChild(notification);
+
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 220);
+        }, 850);
     }
 
     handleGlobalLetterClick(letter) {
@@ -2583,7 +2765,7 @@ class DailyQuotePuzzle {
             }, 300);
         } else {
             for (const word of this.currentQuote.scrambledWords) {
-                if (!this.solvedWords.has(word.original)) {
+                if (!this.solvedWords.has(this.getWordSolveKey(word))) {
                     setTimeout(() => {
                         this.activateWordSmoothly(word, false);
                     }, 300);
@@ -2594,7 +2776,7 @@ class DailyQuotePuzzle {
     }
 
     activateWordSmoothly(wordData, resetInput = true) {
-        if (this.solvedWords.has(wordData.original)) return;
+        if (this.solvedWords.has(this.getWordSolveKey(wordData))) return;
 
         // Reset current input before switching to new word
         if (resetInput) {
@@ -3142,7 +3324,7 @@ class DailyQuotePuzzle {
                             this.updateAuthorDisplay();
                             this.playAuthorCompleteSound();
                         } else {
-                            this.solvedWords.add(this.activeWord.original);
+                            this.solvedWords.add(this.getWordSolveKey(this.activeWord));
                             this.updateWordDisplay(this.activeWord);
                             this.playWordCompleteSound();
 
@@ -3659,6 +3841,53 @@ class DailyQuotePuzzle {
         this.globalLetterPool = allLetterCounts;
     }
 
+    recalculateGlobalLetterPool() {
+        if (!this.currentQuote) {
+            this.globalLetterPool = {};
+            return;
+        }
+
+        // When puzzle is complete, no letters should remain available.
+        if (this.gameComplete) {
+            this.globalLetterPool = {};
+            return;
+        }
+
+        const remainingCounts = {};
+
+        // Count letters for all unsolved quote words.
+        this.currentQuote.scrambledWords.forEach(word => {
+            if (this.solvedWords.has(this.getWordSolveKey(word))) {
+                return;
+            }
+
+            word.scrambled.split('').forEach(letter => {
+                const lowerLetter = letter.toLowerCase();
+                remainingCounts[lowerLetter] = (remainingCounts[lowerLetter] || 0) + 1;
+            });
+        });
+
+        // Count letters for author only if not solved.
+        if (!this.authorSolved && this.currentQuote.scrambledAuthor) {
+            this.currentQuote.scrambledAuthor.replace(/[\s.]/g, '').split('').forEach(letter => {
+                const lowerLetter = letter.toLowerCase();
+                remainingCounts[lowerLetter] = (remainingCounts[lowerLetter] || 0) + 1;
+            });
+        }
+
+        // Subtract letters currently typed in the active input row.
+        if (this.userInput && this.userInput.length > 0) {
+            this.userInput.split('').forEach(letter => {
+                const lowerLetter = letter.toLowerCase();
+                if (remainingCounts[lowerLetter]) {
+                    remainingCounts[lowerLetter] = Math.max(0, remainingCounts[lowerLetter] - 1);
+                }
+            });
+        }
+
+        this.globalLetterPool = remainingCounts;
+    }
+
     async loadChallengeForDate(dateStr, skipInkDropCheck = false) {
         // Check if this is a past challenge (not today) and requires ink drops
         const today = new Date();
@@ -3738,7 +3967,7 @@ class DailyQuotePuzzle {
             if (puzzleData && puzzleData.solved) {
                 // Quote is already completed, show just the quote without stats or congrats
                 this.gameComplete = true;
-                this.solvedWords = new Set(puzzleData.solvedWords || []);
+                this.solvedWords = this.normalizeSolvedWordsSet(puzzleData.solvedWords || []);
                 this.authorSolved = puzzleData.authorSolved || false;
                 this.gameTime = puzzleData.time || 0;
                 this.startTime = new Date(dateStr);
@@ -3768,7 +3997,7 @@ class DailyQuotePuzzle {
                 if (shouldRestoreState) {
                     // Restore saved state
                     console.log('🔄 Restoring saved state for puzzle:', dateStr);
-                    this.solvedWords = new Set(savedState.solvedWords || []);
+                    this.solvedWords = this.normalizeSolvedWordsSet(savedState.solvedWords || []);
                     this.authorSolved = savedState.authorSolved || false;
                     this.gameComplete = savedState.gameComplete || false;
                     // Clear user input and feedback - start fresh on reload
@@ -3783,11 +4012,19 @@ class DailyQuotePuzzle {
                     }
 
                     // Find the active word if it was saved
-                    if (savedState.activeWord) {
+                    if (savedState.activeWordIsAuthor) {
+                        this.activeWord = null;
+                    } else if (typeof savedState.activeWordIndex === 'number') {
                         this.activeWord = this.currentQuote.scrambledWords.find(
-                            sw => sw.original === savedState.activeWord
+                            sw => sw.index === savedState.activeWordIndex
                         ) || this.currentQuote.scrambledWords.find(
-                            sw => !this.solvedWords.has(sw.original)
+                            sw => !this.solvedWords.has(this.getWordSolveKey(sw))
+                        );
+                    } else if (savedState.activeWord) {
+                        this.activeWord = this.currentQuote.scrambledWords.find(
+                            sw => sw.original === savedState.activeWord && !this.solvedWords.has(this.getWordSolveKey(sw))
+                        ) || this.currentQuote.scrambledWords.find(
+                            sw => !this.solvedWords.has(this.getWordSolveKey(sw))
                         );
                     } else {
                         this.activeWord = null;
@@ -3811,7 +4048,7 @@ class DailyQuotePuzzle {
                     // Auto-activate first unsolved word if no active word
                     if (!this.activeWord && this.currentQuote.scrambledWords.length > 0) {
                         const firstUnsolved = this.currentQuote.scrambledWords.find(
-                            sw => !this.solvedWords.has(sw.original)
+                            sw => !this.solvedWords.has(this.getWordSolveKey(sw))
                         );
                         if (firstUnsolved) {
                             setTimeout(() => {
@@ -3933,6 +4170,41 @@ class DailyQuotePuzzle {
         }
     }
 
+    handleMenuHeaderTap() {
+        this.menuHeaderTapCount += 1;
+
+        if (this.menuHeaderTapResetTimeout) {
+            clearTimeout(this.menuHeaderTapResetTimeout);
+            this.menuHeaderTapResetTimeout = null;
+        }
+
+        if (this.menuHeaderTapCount >= 5) {
+            this.menuHeaderTapCount = 0;
+            this.resetProgressForTesting();
+            return;
+        }
+
+        this.menuHeaderTapResetTimeout = setTimeout(() => {
+            this.menuHeaderTapCount = 0;
+            this.menuHeaderTapResetTimeout = null;
+        }, 3000);
+    }
+
+    resetProgressForTesting() {
+        const keysToClear = [
+            'quotePuzzleUserData',
+            'dailyQuotePuzzleCurrentState',
+            'dailyQuotePuzzleSettings',
+            'remoteQuotes',
+            'quotesVersion',
+            'quotesLastCheck'
+        ];
+
+        keysToClear.forEach(key => localStorage.removeItem(key));
+        this.showShareSuccess('QA reset: progress cleared. Reloading...');
+        setTimeout(() => window.location.reload(), 450);
+    }
+
     setupEventListeners() {
         // Debug: Check if elements exist
         console.log('Setting up event listeners...');
@@ -3959,6 +4231,12 @@ class DailyQuotePuzzle {
         if (this.elements.closeMenu) {
             this.addMobileTouchHandling(this.elements.closeMenu, () => {
                 this.closeMenu();
+            });
+        }
+
+        if (this.elements.menuHeader) {
+            this.addMobileTouchHandling(this.elements.menuHeader, () => {
+                this.handleMenuHeaderTap();
             });
         }
 
@@ -4038,11 +4316,6 @@ class DailyQuotePuzzle {
         }
         if (this.elements.backspaceBtn) {
             this.addMobileTouchHandling(this.elements.backspaceBtn, () => this.handleBackspace());
-        }
-        if (this.elements.quickResetWordBtn) {
-            this.addMobileTouchHandling(this.elements.quickResetWordBtn, () => {
-                this.resetInput();
-            });
         }
         if (this.elements.unscrambleBtn) {
             this.addMobileTouchHandling(this.elements.unscrambleBtn, async () => {
@@ -4204,6 +4477,13 @@ class DailyQuotePuzzle {
             this.elements.backgroundMusicToggle.addEventListener('change', (e) => {
                 this.backgroundMusicEnabled = e.target.checked;
                 this.toggleBackgroundMusic();
+                this.saveSettings();
+            });
+        }
+
+        if (this.elements.autoResetToggle) {
+            this.elements.autoResetToggle.addEventListener('change', (e) => {
+                this.autoResetOnIncorrect = e.target.checked;
                 this.saveSettings();
             });
         }
@@ -4443,7 +4723,7 @@ class DailyQuotePuzzle {
         if (puzzleData) {
             // Today's puzzle is already completed, treat it like any other completed challenge
             this.gameComplete = true;
-            this.solvedWords = new Set(puzzleData.solvedWords || []);
+            this.solvedWords = this.normalizeSolvedWordsSet(puzzleData.solvedWords || []);
             this.authorSolved = puzzleData.authorSolved || false;
             this.gameTime = puzzleData.time || 0;
             this.startTime = new Date(todayStr);
@@ -5903,7 +6183,7 @@ Check console for detailed logs.`;
             notificationElement.className = 'achievement-notification daily-login-bonus';
 
             notificationElement.innerHTML = `
-                <div class="notif-icon">💧</div>
+                <div class="notif-icon daily-drop-icon"><i class="fas fa-tint"></i></div>
                 <div class="notif-text">
                     <h4>✓ Daily Login Bonus!</h4>
                     <p>+${bonusAmount} ink drops</p>

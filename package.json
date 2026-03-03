@@ -1,28 +1,31 @@
 {
-  "name": "quotle",
-  "version": "1.0.0",
-  "description": "Daily Quote Puzzle Game - Unscramble quotes from famous authors",
-  "main": "index.html",
-  "scripts": {
-    "start": "npx http-server . -p 8080",
-    "dev": "npx http-server . -p 8080 -o"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/jppalli/quotle.git"
-  },
-  "dependencies": {},
-  "devDependencies": {
-    "http-server": "^14.1.1"
-  },
-  "keywords": [
-    "game",
-    "puzzle",
-    "quotes",
-    "word-game",
-    "daily-puzzle"
-  ],
-  "author": "jppalli",
-  "license": "MIT",
-  "homepage": "https://github.com/jppalli/quotle#readme"
+    "name":  "quotle",
+    "version":  "1.0.0",
+    "description":  "Daily Quote Puzzle Game - Unscramble quotes from famous authors",
+    "main":  "index.html",
+    "scripts":  {
+                    "start":  "npx http-server . -p 8080",
+                    "dev":  "npx http-server . -p 8080 -o",
+                    "build:itch":  "powershell -ExecutionPolicy Bypass -File ./scripts/build-itch-zip.ps1"
+                },
+    "repository":  {
+                       "type":  "git",
+                       "url":  "https://github.com/jppalli/quotle.git"
+                   },
+    "dependencies":  {
+
+                     },
+    "devDependencies":  {
+                            "http-server":  "^14.1.1"
+                        },
+    "keywords":  [
+                     "game",
+                     "puzzle",
+                     "quotes",
+                     "word-game",
+                     "daily-puzzle"
+                 ],
+    "author":  "jppalli",
+    "license":  "MIT",
+    "homepage":  "https://github.com/jppalli/quotle#readme"
 }

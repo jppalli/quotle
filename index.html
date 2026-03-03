@@ -174,16 +174,26 @@
 
         .title-date-container {
             display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 12px;
+            gap: 2px;
         }
 
 
 
         .quotle-title {
-            height: 50px;
+            height: 62px;
             width: auto;
             object-fit: contain;
+        }
+
+        .quotle-subtitle {
+            margin: 2px 0 0 0;
+            font-size: 14px;
+            color: #888;
+            letter-spacing: 1px;
+            font-family: 'Special Elite', 'Courier New', monospace;
+            font-weight: 400;
         }
 
         .header-icons {
@@ -768,7 +778,7 @@
 
 
             .quotle-title {
-                height: 42px;
+                height: 52px;
             }
 
             .header {
@@ -783,7 +793,7 @@
 
 
             .quotle-title {
-                height: 38px;
+                height: 48px;
             }
 
             .header {
@@ -859,6 +869,31 @@
             align-items: center;
             margin-bottom: 30px;
             position: relative;
+        }
+
+        .word-validation-message {
+            position: absolute;
+            left: 50%;
+            bottom: -22px;
+            transform: translateX(-50%);
+            background: rgba(20, 20, 20, 0.92);
+            color: #f5f5f5;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+            line-height: 1;
+            opacity: 0;
+            transition: opacity 0.18s ease;
+            pointer-events: none;
+            z-index: 12;
+            white-space: nowrap;
+        }
+
+        .word-validation-message.show {
+            opacity: 1;
         }
 
         .letter-cells-wrap {
@@ -985,6 +1020,17 @@
             75% {
                 transform: translateX(2px);
             }
+        }
+
+        /* Shake for incorrect word */
+        @keyframes wordShake {
+            0%, 100% { transform: translateX(0); }
+            10%, 50%, 90% { transform: translateX(-4px); }
+            30%, 70% { transform: translateX(4px); }
+        }
+
+        .letter-cells-wrap.shake-wrong {
+            animation: wordShake 0.4s ease-in-out;
         }
 
         /* Success feedback animation */
@@ -1163,30 +1209,6 @@
             justify-content: center;
             gap: 10px;
             margin-top: 20px;
-        }
-
-        .quick-reset-row {
-            display: none;
-            position: absolute;
-            left: calc(100% + 10px);
-            top: 50%;
-            transform: translateY(-50%);
-            align-items: center;
-        }
-
-        .quick-reset-row.show {
-            display: flex;
-        }
-
-        .quick-reset-row.below-right {
-            left: auto;
-            right: 0;
-            top: calc(100% + 8px);
-            transform: none;
-        }
-
-        .quick-reset-btn {
-            white-space: nowrap;
         }
 
         .control-btn {
@@ -1553,6 +1575,7 @@
 
         .title-date-container {
             display: flex;
+            flex-direction: column;
             align-items: center;
         }
 
@@ -2543,6 +2566,18 @@
         /* Make ink drops icon grey in notifications */
         .achievement-notification.ink-drops-refill h4 {
             filter: grayscale(1) brightness(0.8);
+        }
+
+        .achievement-notification .daily-drop-icon {
+            color: #111;
+            filter: none;
+            background: #f2f2f2;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
         }
 
 
@@ -4176,7 +4211,7 @@
     <!-- Loading Screen -->
     <div class="loading-screen" id="loadingScreen">
         <div class="loading-content">
-            <img src="assets/quotle-title.png" alt="Quotle" class="loading-logo">
+            <img src="assets/quotle-title.png" alt="Quotle" class="loading-logo" onerror="this.style.display='none';var s=document.createElement('span');s.textContent='QUOTLE';s.style.cssText='font-size:40px;font-weight:700;font-family:Special Elite,Courier New,monospace;letter-spacing:3px;';this.parentNode.insertBefore(s,this);">
             <div class="loading-spinner"></div>
             <p class="loading-text">Loading your puzzle<span class="loading-dots"></span></p>
         </div>
@@ -4194,7 +4229,8 @@
                     <div class="notification-dot" id="hamburgerNotification" style="display: none;"></div>
                 </div>
                 <div class="title-date-container">
-                    <img src="assets/quotle-title.png" alt="Quotle" class="quotle-title">
+                    <img src="assets/quotle-title.png" alt="Quotle" class="quotle-title" onerror="this.style.display='none';var s=document.createElement('span');s.textContent='QUOTLE';s.style.cssText='font-size:36px;font-weight:700;font-family:Special Elite,Courier New,monospace;letter-spacing:3px;';this.parentNode.insertBefore(s,this);">
+                    <p class="quotle-subtitle">A new quote every day</p>
                 </div>
                 <div class="ink-drops-container" id="inkDropsContainer">
                     <div class="ink-drops-plus-btn" id="inkDropsPlusBtn" style="display: none;" title="Get more drops">
@@ -4256,11 +4292,6 @@
             <div class="letter-input-row" id="letterInputRow">
                 <div class="letter-cells-wrap" id="letterCellsWrap">
                     <div class="letter-cells" id="letterCells"></div>
-                    <div class="quick-reset-row" id="quickResetRow">
-                        <button class="control-btn quick-reset-btn" id="quickResetWordBtn">
-                            <i class="fas fa-rotate-left"></i> Try Again
-                        </button>
-                    </div>
                 </div>
             </div>
             <div class="available-letters" id="availableLetters"></div>
@@ -4436,6 +4467,18 @@
                     <div class="setting-toggle">
                         <label class="toggle-switch">
                             <input type="checkbox" id="backgroundMusicToggle" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <i class="fas fa-rotate-left"></i>
+                        <span>Auto-reset wrong words</span>
+                    </div>
+                    <div class="setting-toggle">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="autoResetToggle" checked>
                             <span class="toggle-slider"></span>
                         </label>
                     </div>
